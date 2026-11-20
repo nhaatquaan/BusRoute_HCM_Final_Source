@@ -10,6 +10,9 @@ export function RouteResult({
   onSelectPath,
   error = null,
   loading = false,
+  originWalkInfo = null,
+  destWalkInfo = null,
+  onInspectStop,
 }) {
   if (loading) {
     return (
@@ -66,6 +69,9 @@ export function RouteResult({
           path={path}
           isSelected={idx === selectedPathIndex}
           onSelect={() => onSelectPath(idx)}
+          originWalkInfo={originWalkInfo}
+          destWalkInfo={destWalkInfo}
+          onInspectStop={onInspectStop}
         />
       ))}
     </div>

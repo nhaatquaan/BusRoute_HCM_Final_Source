@@ -14,7 +14,8 @@ import {
   Map as MapIcon,
   Navigation,
   Clock,
-  Milestone
+  Milestone,
+  Printer
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -22,6 +23,7 @@ import 'leaflet/dist/leaflet.css';
 
 import { routeService } from '../../../services/routeService';
 import { stopService } from '../../../services/stopService';
+import { printRouteDocument, formatCurrency } from '../../route-planner/utils/routeHelpers.js';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 
@@ -160,6 +162,21 @@ export default function RouteDetailPage() {
     setDirty(false);
   };
 
+  const handlePrintCurrentRoute = () => {
+    if (!route) return;
+    printRouteDocument({
+      title: `THÔNG TIN LỘ TRÌNH TUYẾN XE BUÝT SỐ ${route.code}`,
+      subtitle: `${route.name} — Chiều: ${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'} (${route.startPoint || ''} ➔ ${route.endPoint || ''})`,
+      stops: orderedStops,
+      metaList: [
+        { label: 'Mã tuyến xe', value: `Tuyến ${route.code}` },
+        { label: 'Giá vé lượt', value: formatCurrency(route.ticketPrice || route.giaVe || 6000) },
+        { label: 'Giờ hoạt động', value: route.operatingHours || route.thoiGianHoatDong || '05:00 - 20:30' },
+        { label: 'Chiều & Số trạm', value: `${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'} (${orderedStops.length} trạm)` },
+      ],
+    });
+  };
+
   const handleSaveOrder = async () => {
     if (!window.confirm(`Bạn có chắc chắn muốn lưu lộ trình "${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}" vào MongoDB?`)) {
       return;
@@ -234,6 +251,9 @@ export default function RouteDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={handlePrintCurrentRoute}>
+            <Printer size={14} /> In thông tin tuyến
+          </Button>
           {dirty && (
             <Button variant="secondary" size="sm" onClick={handleResetOrder}>
               <RotateCcw size={14} /> Hoàn tác

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bus, Navigation, Network, Map, Search, Database, Layers } from 'lucide-react';
+import { Bus, Navigation, Network, Map, Search, Database, Layers, Scale, BarChart3 } from 'lucide-react';
 import { useRoutePlanner } from './hooks/useRoutePlanner.js';
 import { RouteSearch } from './search/RouteSearch.jsx';
 import { RouteResult } from './result/RouteResult.jsx';
@@ -7,6 +7,9 @@ import { RouteGraph } from './graph/RouteGraph.jsx';
 import { CytoscapeGraph } from './graph/CytoscapeGraph.jsx';
 import { RouteMap } from './map/RouteMap.jsx';
 import { StopRoutesSearch } from './by-stop/StopRoutesSearch.jsx';
+import { RouteComparison } from './compare/RouteComparison.jsx';
+import { StopDetailModal } from './by-stop/StopDetailModal.jsx';
+import NetworkAnalyticsPage from '../admin/analytics/NetworkAnalyticsPage.jsx';
 import './routePlanner.css';
 
 export function RoutePlannerModule({
@@ -54,6 +57,24 @@ export function RoutePlannerModule({
 
   const [showMap, setShowMap] = useState(true);
   const [showGraph, setShowGraph] = useState(true);
+  const [originWalkInfo, setOriginWalkInfo] = useState(null);
+  const [destWalkInfo, setDestWalkInfo] = useState(null);
+  const [inspectingStop, setInspectingStop] = useState(null);
+
+  const handleOpenStopDetail = (stopObj) => {
+    if (!stopObj) return;
+    const stopId = stopObj.maTram || stopObj.ma_tram || stopObj.code || stopObj.id || stopObj._key;
+    const fullStop =
+      stopsList.find(
+        (s) =>
+          s.maTram === stopId ||
+          s.ma_tram === stopId ||
+          s.code === stopId ||
+          s.id === stopId ||
+          s._key === stopId
+      ) || stopObj;
+    setInspectingStop(fullStop);
+  };
 
   return (
     <div className="route-planner-module">
@@ -185,7 +206,16 @@ export function RoutePlannerModule({
           onClick={() => setActiveTab('by-stop')}
         >
           <Search size={18} />
-          <span>Tra cứu tuyến qua một trạm</span>
+          <span>Tìm tuyến theo trạm dừng</span>
+        </button>
+
+        <button
+          type="button"
+          className={`module-tab-btn ${activeTab === 'compare-routes' ? 'active' : ''}`}
+          onClick={() => setActiveTab('compare-routes')}
+        >
+          <Scale size={18} />
+          <span>So sánh hai tuyến</span>
         </button>
 
         <button
@@ -194,7 +224,16 @@ export function RoutePlannerModule({
           onClick={() => setActiveTab('network-graph')}
         >
           <Layers size={18} />
-          <span>Khám phá mạng lưới (Cytoscape.js)</span>
+          <span>Khám phá mạng lưới (Graph)</span>
+        </button>
+
+        <button
+          type="button"
+          className={`module-tab-btn ${activeTab === 'mongo-stats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mongo-stats')}
+        >
+          <BarChart3 size={18} />
+          <span>Dashboard thống kê MongoDB</span>
         </button>
       </div>
 
@@ -213,6 +252,10 @@ export function RoutePlannerModule({
             onSearch={searchRoute}
             loading={loading}
             stops={stopsList}
+            originWalkInfo={originWalkInfo}
+            setOriginWalkInfo={setOriginWalkInfo}
+            destWalkInfo={destWalkInfo}
+            setDestWalkInfo={setDestWalkInfo}
           />
 
           {/* Results List */}
@@ -223,6 +266,9 @@ export function RoutePlannerModule({
             onSelectPath={setSelectedPathIndex}
             error={error}
             loading={loading}
+            originWalkInfo={originWalkInfo}
+            destWalkInfo={destWalkInfo}
+            onInspectStop={handleOpenStopDetail}
           />
 
           {/* Visualizations Toolbar (when a path exists) */}
@@ -260,7 +306,12 @@ export function RoutePlannerModule({
 
           {/* Leaflet Map Visualization */}
           {showMap && selectedPath && (
-            <RouteMap path={selectedPath} />
+            <RouteMap
+              path={selectedPath}
+              originWalkInfo={originWalkInfo}
+              destWalkInfo={destWalkInfo}
+              onInspectStop={handleOpenStopDetail}
+            />
           )}
         </div>
       )}
@@ -275,13 +326,41 @@ export function RoutePlannerModule({
           loading={byStopLoading}
           error={byStopError}
           stops={stopsList}
+          onInspectStop={handleOpenStopDetail}
         />
       )}
 
-      {/* Tab 3: Cytoscape Network Graph Explorer */}
+      {/* Tab 3: Compare Two Routes */}
+      {activeTab === 'compare-routes' && (
+        <RouteComparison onInspectStop={handleOpenStopDetail} />
+      )}
+
+      {/* Tab 4: Cytoscape Network Graph Explorer */}
       {activeTab === 'network-graph' && (
         <CytoscapeGraph />
       )}
+
+      {/* Tab 5: MongoDB Analytics Dashboard */}
+      {activeTab === 'mongo-stats' && (
+        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-xs">
+          <NetworkAnalyticsPage />
+        </div>
+      )}
+
+      {/* Modal: Trang Chi Tiết Trạm Dừng & Bảng Điện Tử Dự Báo Xe Tới */}
+      <StopDetailModal
+        isOpen={Boolean(inspectingStop)}
+        onClose={() => setInspectingStop(null)}
+        stop={inspectingStop}
+        onSetAsOrigin={(stopId) => {
+          setActiveTab('path-finder');
+          setFromStop(stopId);
+        }}
+        onSetAsDestination={(stopId) => {
+          setActiveTab('path-finder');
+          setToStop(stopId);
+        }}
+      />
     </div>
   );
 }

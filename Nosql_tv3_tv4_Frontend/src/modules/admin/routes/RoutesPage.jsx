@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2, Route, Download, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Route, Download, ExternalLink, CheckCircle2, AlertCircle, Printer } from 'lucide-react';
 import { routeService } from '../../../services/routeService';
+import { printRouteDocument, formatCurrency } from '../../route-planner/utils/routeHelpers.js';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -78,6 +79,27 @@ export default function RoutesPage() {
       setDeletingRoute(null);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handlePrintSingleRoute = async (route) => {
+    try {
+      const detail = await routeService.getById(route.id || route._key);
+      const code = detail.code || detail.ma_tuyen || route.code;
+      const name = detail.name || detail.ten_tuyen || route.name;
+      printRouteDocument({
+        title: `PHIẾU THÔNG TIN TUYẾN XE BUÝT SỐ ${code}`,
+        subtitle: `${name} (${detail.startPoint || detail.diem_dau || ''} ➔ ${detail.endPoint || detail.diem_cuoi || ''})`,
+        stops: detail.stops || [],
+        metaList: [
+          { label: 'Mã tuyến xe', value: `Tuyến ${code}` },
+          { label: 'Giá vé lượt', value: formatCurrency(detail.ticketPrice || detail.gia_ve || 6000) },
+          { label: 'Giờ hoạt động', value: detail.operatingHours || detail.thoiGianHoatDong || '05:00 - 20:30' },
+          { label: 'Số trạm dừng', value: `${(detail.stops || []).length} trạm` },
+        ],
+      });
+    } catch (err) {
+      showFeedback('Lỗi khi tải chi tiết tuyến để in: ' + err.message, 'error');
     }
   };
 
@@ -217,6 +239,14 @@ export default function RoutesPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintSingleRoute(route)}
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#16866B]"
+                        title="In phiếu thông tin tuyến xe này"
+                      >
+                        <Printer size={15} />
+                      </button>
                       <Link
                         to={`${basePath}/routes/${route.id || route._key}`}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#245A85]"

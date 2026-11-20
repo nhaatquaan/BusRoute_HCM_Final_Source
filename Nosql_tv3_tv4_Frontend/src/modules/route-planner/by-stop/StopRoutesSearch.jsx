@@ -12,6 +12,7 @@ export function StopRoutesSearch({
   loading = false,
   error = null,
   stops = [],
+  onInspectStop,
 }) {
   const handleSelect = (stopId) => {
     setSelectedStop(stopId);
@@ -75,7 +76,27 @@ export function StopRoutesSearch({
         <div className="by-stop-result-card">
           <div className="by-stop-info-header">
             <div>
-              <div className="by-stop-station-name">{result.stop?.name}</div>
+              <div className="by-stop-station-name" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span>{result.stop?.name}</span>
+                {onInspectStop && result.stop && (
+                  <button
+                    type="button"
+                    onClick={() => onInspectStop(result.stop)}
+                    style={{
+                      background: '#172B4D',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📍 Xem chi tiết trạm & Bảng điện tử xe tới
+                  </button>
+                )}
+              </div>
               {result.stop?.address && (
                 <div className="by-stop-station-address">{result.stop.address}</div>
               )}

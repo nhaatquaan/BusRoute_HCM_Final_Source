@@ -1,9 +1,45 @@
-import React from 'react';
-import { Map, MapPin } from 'lucide-react';
-import { MapContainer, TileLayer, CircleMarker, Polyline, Popup } from 'react-leaflet';
+import React, { useEffect, useState } from 'react';
+import { Map, MapPin, Bus, Play, Pause, Radio } from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker, Polyline, Popup, Marker } from 'react-leaflet';
+import L from 'leaflet';
 import './map.css';
 
-export function RouteMap({ path }) {
+// Tạo icon chiếc xe buýt di chuyển trên bản đồ
+const createMovingBusIcon = (routeCode, color = '#2563eb') =>
+  new L.DivIcon({
+    className: 'live-moving-bus-marker',
+    html: `
+      <div style="
+        display:flex;
+        align-items:center;
+        gap:3px;
+        background:${color};
+        color:#fff;
+        font-weight:800;
+        font-size:10px;
+        padding:3px 7px;
+        border-radius:999px;
+        border:2px solid #ffffff;
+        box-shadow:0 3px 10px rgba(0,0,0,0.35);
+        white-space:nowrap;
+        transform:translate(-50%, -50%);
+      ">
+        <span>🚌 T${routeCode}</span>
+      </div>
+    `,
+    iconSize: [56, 24],
+    iconAnchor: [28, 12],
+  });
+
+export function RouteMap({
+  path,
+  originWalkInfo = null,
+  destWalkInfo = null,
+  onInspectStop,
+}) {
+  const [simPlaying, setSimPlaying] = useState(true);
+  const [busProgress, setBusProgress] = useState(0.15); // 0.0 -> 1.0 dọc theo polyline
+
   if (!path || !path.stops || path.stops.length === 0) {
     return null;
   }
@@ -12,6 +48,18 @@ export function RouteMap({ path }) {
   const stopsWithCoords = path.stops.filter(
     (s) => typeof s.latitude === 'number' && typeof s.longitude === 'number'
   );
+
+  // Hiệu ứng di chuyển xe buýt mượt mà trên bản đồ theo từng giây
+  useEffect(() => {
+    if (!simPlaying || stopsWithCoords.length < 2) return;
+    const interval = setInterval(() => {
+      setBusProgress((prev) => {
+        const next = prev + 0.018;
+        return next >= 1 ? 0 : next;
+      });
+    }, 350);
+    return () => clearInterval(interval);
+  }, [simPlaying, stopsWithCoords.length]);
 
   if (stopsWithCoords.length < 2) {
     return (
@@ -52,16 +100,78 @@ export function RouteMap({ path }) {
 
   const polylinePositions = stopsWithCoords.map((s) => [s.latitude, s.longitude]);
   const routeColor = path.routeDetails?.[0]?.mauSac || '#2563eb';
+  const primaryRouteCode = path.routes?.[0] || '01';
+
+  // Tính tọa độ nội suy của 2 chiếc xe buýt mô phỏng trên tuyến
+  const getInterpolatedCoord = (progress) => {
+    if (stopsWithCoords.length < 2) return [centerLat, centerLng];
+    const totalSegments = stopsWithCoords.length - 1;
+    const exactIdx = progress * totalSegments;
+    const segIdx = Math.min(totalSegments - 1, Math.floor(exactIdx));
+    const t = exactIdx - segIdx;
+    const p1 = stopsWithCoords[segIdx];
+    const p2 = stopsWithCoords[segIdx + 1];
+    const lat = p1.latitude + (p2.latitude - p1.latitude) * t;
+    const lng = p1.longitude + (p2.longitude - p1.longitude) * t;
+    const currentFromStop = p1.name;
+    const currentToStop = p2.name;
+    return { coords: [lat, lng], currentFromStop, currentToStop, segIdx };
+  };
+
+  const bus1 = getInterpolatedCoord(busProgress);
+  const bus2 = getInterpolatedCoord((busProgress + 0.48) % 1);
 
   return (
     <div className="route-map-container">
-      <div className="map-header">
+      <div className="map-header" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div className="map-title-group">
           <h4>
             <Map size={20} color="#2563eb" />
-            <span>Bản đồ Lộ trình Di chuyển</span>
+            <span>Bản đồ Lộ trình & Mô phỏng Xe buýt Thời gian thực</span>
           </h4>
-          <p>Vị trí các trạm đón trả khách và điểm chuyển tuyến trên nền bản đồ OpenStreetMap</p>
+          <p>
+            🚌 Xe 1 đang chạy đoạn: <strong>{bus1.currentFromStop} ➔ {bus1.currentToStop}</strong>
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: '#ecfdf5',
+              color: '#047857',
+              border: '1px solid #a7f3d0',
+              borderRadius: '999px',
+              padding: '4px 10px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+            }}
+          >
+            <Radio size={12} />
+            <span>2 xe đang hoạt động trên tuyến</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setSimPlaying(!simPlaying)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              background: simPlaying ? '#172B4D' : '#2563eb',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '5px 11px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {simPlaying ? <Pause size={13} /> : <Play size={13} />}
+            <span>{simPlaying ? 'Tạm dừng mô phỏng' : 'Chạy mô phỏng xe'}</span>
+          </button>
         </div>
       </div>
 
@@ -87,6 +197,88 @@ export function RouteMap({ path }) {
               dashArray: path.transfers > 0 ? '6, 6' : undefined,
             }}
           />
+
+          {/* Đoạn đi bộ từ vị trí của khách ra trạm xuất phát (nếu dùng Smart Location Search) */}
+          {originWalkInfo && originWalkInfo.lat && originWalkInfo.lng && (
+            <>
+              <Polyline
+                positions={[
+                  [originWalkInfo.lat, originWalkInfo.lng],
+                  [stopsWithCoords[0].latitude, stopsWithCoords[0].longitude],
+                ]}
+                pathOptions={{ color: '#16a34a', weight: 3, dashArray: '4, 6' }}
+              />
+              <CircleMarker
+                center={[originWalkInfo.lat, originWalkInfo.lng]}
+                radius={8}
+                pathOptions={{ fillColor: '#15803d', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+              >
+                <Popup>
+                  <div style={{ fontSize: '12px' }}>
+                    <strong>📍 Vị trí xuất phát của bạn: {originWalkInfo.placeName}</strong>
+                    <div>Đi bộ {originWalkInfo.distanceMeters}m (~{originWalkInfo.walkMinutes} phút) ra trạm đón.</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            </>
+          )}
+
+          {/* Đoạn đi bộ từ trạm đích tới địa điểm cần đến */}
+          {destWalkInfo && destWalkInfo.lat && destWalkInfo.lng && (
+            <>
+              <Polyline
+                positions={[
+                  [
+                    stopsWithCoords[stopsWithCoords.length - 1].latitude,
+                    stopsWithCoords[stopsWithCoords.length - 1].longitude,
+                  ],
+                  [destWalkInfo.lat, destWalkInfo.lng],
+                ]}
+                pathOptions={{ color: '#dc2626', weight: 3, dashArray: '4, 6' }}
+              />
+              <CircleMarker
+                center={[destWalkInfo.lat, destWalkInfo.lng]}
+                radius={8}
+                pathOptions={{ fillColor: '#b91c1c', color: '#ffffff', weight: 2, fillOpacity: 1 }}
+              >
+                <Popup>
+                  <div style={{ fontSize: '12px' }}>
+                    <strong>🏁 Điểm đến của bạn: {destWalkInfo.placeName}</strong>
+                    <div>Đi bộ {destWalkInfo.distanceMeters}m (~{destWalkInfo.walkMinutes} phút) từ trạm xuống xe.</div>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            </>
+          )}
+
+          {/* 2 Chiếc Xe buýt mô phỏng di chuyển thời gian thực trên lộ trình */}
+          <Marker
+            position={bus1.coords}
+            icon={createMovingBusIcon(primaryRouteCode, routeColor)}
+          >
+            <Popup>
+              <div style={{ fontSize: '12px' }}>
+                <strong>🚌 Xe buýt Tuyến {primaryRouteCode} (51B-152.38)</strong>
+                <div>Đang di chuyển: {bus1.currentFromStop} ➔ {bus1.currentToStop}</div>
+                <div style={{ color: '#16a34a', fontWeight: 600 }}>Tốc độ trung bình: 28 km/h • Còn ghế trống</div>
+              </div>
+            </Popup>
+          </Marker>
+
+          {stopsWithCoords.length > 3 && (
+            <Marker
+              position={bus2.coords}
+              icon={createMovingBusIcon(path.routes?.[path.routes.length - 1] || primaryRouteCode, '#0f766e')}
+            >
+              <Popup>
+                <div style={{ fontSize: '12px' }}>
+                  <strong>🚌 Xe buýt Tuyến {path.routes?.[path.routes.length - 1] || primaryRouteCode} (51B-289.14)</strong>
+                  <div>Đang di chuyển: {bus2.currentFromStop} ➔ {bus2.currentToStop}</div>
+                  <div style={{ color: '#0284c7', fontWeight: 600 }}>Tốc độ trung bình: 30 km/h • Đúng giờ</div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
 
           {/* Markers for stops */}
           {stopsWithCoords.map((stop, idx) => {
@@ -144,6 +336,26 @@ export function RouteMap({ path }) {
                         ? '🟠 Trạm chuyển tuyến (Đổi xe tại đây)'
                         : `🔵 Trạm trung gian số ${idx + 1}`}
                     </div>
+                    {onInspectStop && (
+                      <button
+                        type="button"
+                        onClick={() => onInspectStop(stop)}
+                        style={{
+                          marginTop: '6px',
+                          width: '100%',
+                          background: '#172B4D',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Xem bảng điện tử & chi tiết trạm
+                      </button>
+                    )}
                   </div>
                 </Popup>
               </CircleMarker>

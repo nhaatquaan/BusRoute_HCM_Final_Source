@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Bus, Clock, Milestone, ArrowRight, ChevronDown, ChevronUp, Eye, Heart } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Bus,
+  Clock,
+  Milestone,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Heart,
+  Radio,
+  Printer,
+  Footprints,
+  Navigation,
+} from 'lucide-react';
 import { StopList } from './StopList.jsx';
-import { formatDistance, formatDuration, formatCurrency } from '../utils/routeHelpers.js';
+import { formatDistance, formatDuration, formatCurrency, printRouteDocument } from '../utils/routeHelpers.js';
 import { authService } from '../../../services/authService';
 import { passengerService } from '../../../services/passengerService';
 
@@ -9,10 +22,82 @@ export function RouteCard({
   path,
   isSelected = false,
   onSelect,
+  originWalkInfo = null,
+  destWalkInfo = null,
+  onInspectStop,
 }) {
   const [showDetails, setShowDetails] = useState(isSelected);
   const [favoriteRouteCodes, setFavoriteRouteCodes] = useState(new Set());
   const [favLoading, setFavLoading] = useState(false);
+
+  // Mô phỏng vị trí xe buýt đang tới trạm xuất phát (Live ETA Simulation)
+  const primaryRouteCode = path?.routes?.[0] || '01';
+  const startStopName = path?.stops?.[0]?.name || 'Trạm xuất phát';
+  const secondStopName = path?.stops?.[1]?.name || 'Trạm kế tiếp';
+
+  const initialBusSim = useMemo(() => {
+    const seed = (primaryRouteCode.charCodeAt(0) || 1) + (path?.pathIndex || 1) * 3;
+    const stopsAway = (seed % 3) + 1; // Cách 1 - 3 trạm
+    const distanceKm = Number((stopsAway * 0.65).toFixed(1));
+    const etaMinutes = Math.max(1, Math.round(distanceKm * 2.4));
+    const plateNum = `51B-${140 + (seed % 70)}.${20 + (seed % 65)}`;
+    return {
+      busPlate: plateNum,
+      stopsAway,
+      distanceKm,
+      etaMinutes,
+      currentLocationDesc:
+        stopsAway === 1
+          ? `Vừa rời trạm trước, đang tiến thẳng về ${startStopName}`
+          : `Đang trên đường tiến về ${startStopName} (hướng đi ${secondStopName})`,
+    };
+  }, [primaryRouteCode, path?.pathIndex, startStopName, secondStopName]);
+
+  const [busSim, setBusSim] = useState(initialBusSim);
+
+  useEffect(() => {
+    setBusSim(initialBusSim);
+  }, [initialBusSim]);
+
+  // Cập nhật mô phỏng xe tiến lại gần trạm đón theo thời gian thực
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBusSim((prev) => {
+        if (prev.etaMinutes <= 0) {
+          // Reset sang chuyến xe kế tiếp sau khi xe đã tới trạm
+          return initialBusSim;
+        }
+        const nextDist = Math.max(0, Number((prev.distanceKm - 0.15).toFixed(2)));
+        const nextEta = nextDist <= 0.1 ? 0 : Math.max(1, Math.round(nextDist * 2.4));
+        const nextStopsAway = nextEta === 0 ? 0 : Math.max(1, Math.ceil(nextDist / 0.65));
+        return {
+          ...prev,
+          distanceKm: Number(nextDist.toFixed(1)),
+          etaMinutes: nextEta,
+          stopsAway: nextStopsAway,
+        };
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [initialBusSim]);
+
+  const handlePrintThisPath = (e) => {
+    e.stopPropagation();
+    const firstStop = path?.stops?.[0]?.name || '';
+    const lastStop = path?.stops?.[path.stops.length - 1]?.name || '';
+    printRouteDocument({
+      title: `PHIẾU HƯỚNG DẪN LỘ TRÌNH XE BUÝT (PHƯƠNG ÁN #${path.pathIndex || 1})`,
+      subtitle: `Hành trình: ${firstStop} ➔ ${lastStop} (Tuyến ${path.routes.join(' ➔ Tuyến ')})`,
+      stops: path.stops || [],
+      segments: path.segments || [],
+      metaList: [
+        { label: 'Tuyến sử dụng', value: `Tuyến ${path.routes.join(', ')}` },
+        { label: 'Số lần chuyển tuyến', value: path.transfers === 0 ? 'Đi thẳng (0 đổi xe)' : `${path.transfers} lần chuyển` },
+        { label: 'Tổng thời gian & cự ly', value: `~${formatDuration(path.totalDuration)} (${formatDistance(path.totalDistance)})` },
+        { label: 'Tổng số trạm qua', value: `${path.totalStops} trạm dừng` },
+      ],
+    });
+  };
 
   const isAuth = authService.isAuthenticated();
 
@@ -168,30 +253,138 @@ export function RouteCard({
             </div>
           )}
         </div>
+
+        {/* LIVE BUS SIMULATION & ETA BAR (Mô phỏng vị trí xe buýt đang tới trạm bắt đầu) */}
+        <div
+          style={{
+            marginTop: '10px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: busSim.etaMinutes === 0 ? '#ecfdf5' : '#f0f9ff',
+            border: busSim.etaMinutes === 0 ? '1px solid #6ee7b7' : '1px solid #bae6fd',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            fontSize: '0.78rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: busSim.etaMinutes === 0 ? '#059669' : '#0284c7',
+                color: '#ffffff',
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+              }}
+            >
+              <Radio size={12} />
+              <span>LIVE MÔ PHỎNG</span>
+            </span>
+            <span>
+              🚌 <strong>Tuyến {primaryRouteCode}</strong> (Xe <code style={{ fontWeight: 700 }}>{busSim.busPlate}</code>):{' '}
+              {busSim.etaMinutes === 0 ? (
+                <strong style={{ color: '#059669' }}>Xe đã cập bến tại {startStopName} — Sẵn sàng đón khách!</strong>
+              ) : (
+                <>
+                  Đang cách trạm đón <strong>{startStopName}</strong> khoảng{' '}
+                  <strong>
+                    {busSim.stopsAway} trạm (~{busSim.distanceKm} km)
+                  </strong>
+                </>
+              )}
+            </span>
+          </div>
+
+          <div style={{ fontWeight: 800, color: busSim.etaMinutes === 0 ? '#059669' : '#0369a1' }}>
+            {busSim.etaMinutes === 0 ? '🟢 Đang đón khách' : `⏱️ Dự kiến tới trạm sau ~${busSim.etaMinutes} phút`}
+          </div>
+        </div>
+
+        {/* Walking guidance if user searched from a custom location */}
+        {(originWalkInfo || destWalkInfo) && (
+          <div
+            style={{
+              marginTop: '6px',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              background: '#f8fafc',
+              border: '1px dashed #cbd5e1',
+              fontSize: '0.74rem',
+              color: '#334155',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            {originWalkInfo && (
+              <span>
+                🚶 <strong>Chặng đầu:</strong> Đi bộ {originWalkInfo.distanceMeters}m (~{originWalkInfo.walkMinutes} phút) từ{' '}
+                <strong>{originWalkInfo.placeName}</strong> ra trạm <strong>{originWalkInfo.nearestStopName}</strong>
+              </span>
+            )}
+            {destWalkInfo && (
+              <span>
+                🏁 <strong>Chặng cuối:</strong> Xuống tại trạm <strong>{destWalkInfo.nearestStopName}</strong> rồi đi bộ{' '}
+                {destWalkInfo.distanceMeters}m (~{destWalkInfo.walkMinutes} phút) tới <strong>{destWalkInfo.placeName}</strong>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action footer */}
       <div className="route-card-footer">
-        <button
-          type="button"
-          className="toggle-details-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowDetails(!showDetails);
-          }}
-        >
-          {showDetails ? (
-            <>
-              <ChevronUp size={16} />
-              <span>Thu gọn danh sách trạm</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown size={16} />
-              <span>Xem chi tiết lộ trình ({path.totalStops} trạm)</span>
-            </>
-          )}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="toggle-details-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetails(!showDetails);
+            }}
+          >
+            {showDetails ? (
+              <>
+                <ChevronUp size={16} />
+                <span>Thu gọn danh sách trạm</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                <span>Xem chi tiết lộ trình ({path.totalStops} trạm)</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrintThisPath}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              padding: '4px 10px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: '#334155',
+              cursor: 'pointer',
+            }}
+            title="In phiếu hướng dẫn lộ trình này hoặc lưu thành PDF"
+          >
+            <Printer size={13} />
+            <span>In lộ trình</span>
+          </button>
+        </div>
 
         {!isSelected && (
           <button
@@ -210,7 +403,7 @@ export function RouteCard({
       {/* Expanded Stop List */}
       {showDetails && (
         <div className="route-card-expanded">
-          <StopList path={path} />
+          <StopList path={path} onInspectStop={onInspectStop} />
         </div>
       )}
     </div>

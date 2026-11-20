@@ -5,6 +5,7 @@ import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import StopFormModal from './StopFormModal';
+import { StopDetailModal } from '../../route-planner/by-stop/StopDetailModal.jsx';
 
 export default function StopsPage() {
   const [stops, setStops] = useState([]);
@@ -15,6 +16,7 @@ export default function StopsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingStop, setEditingStop] = useState(null);
   const [deletingStop, setDeletingStop] = useState(null);
+  const [inspectingStop, setInspectingStop] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -201,7 +203,14 @@ export default function StopsPage() {
                       {stop.code || stop.ma_tram}
                     </td>
                     <td className="px-5 py-3.5 font-semibold text-[#172B4D]">
-                      {stop.name || stop.ten_tram}
+                      <button
+                        type="button"
+                        onClick={() => setInspectingStop(stop)}
+                        className="text-left hover:text-[#245A85] hover:underline cursor-pointer"
+                        title="Xem trang chi tiết trạm dừng, bản đồ và bảng điện tử các tuyến xe đi qua"
+                      >
+                        {stop.name || stop.ten_tram}
+                      </button>
                     </td>
                     <td className="px-5 py-3.5 text-slate-600 max-w-xs truncate">
                       {stop.address || stop.dia_chi || '—'}
@@ -256,6 +265,13 @@ export default function StopsPage() {
         onClose={() => setFormOpen(false)}
         initialData={editingStop}
         onSubmit={handleSave}
+      />
+
+      {/* Stop Detail Modal */}
+      <StopDetailModal
+        isOpen={Boolean(inspectingStop)}
+        onClose={() => setInspectingStop(null)}
+        stop={inspectingStop}
       />
 
       {/* Confirm Delete Dialog */}

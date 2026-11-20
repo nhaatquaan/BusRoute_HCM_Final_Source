@@ -16,6 +16,7 @@ import 'leaflet/dist/leaflet.css';
 import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
+import { StopDetailModal } from '../../route-planner/by-stop/StopDetailModal.jsx';
 
 // Leaflet User Location Icon
 const userLocationIcon = new L.DivIcon({
@@ -56,6 +57,7 @@ export default function NearbyStopsPage() {
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState('');
   const [sortedStops, setSortedStops] = useState([]);
+  const [inspectingStop, setInspectingStop] = useState(null);
 
   useEffect(() => {
     loadStops();
@@ -164,7 +166,12 @@ export default function NearbyStopsPage() {
 
           <div className="flex-1 overflow-y-auto divide-y divide-[#E2E8F0]">
             {sortedStops.map((s, idx) => (
-              <div key={s.id || s._id} className="p-3.5 hover:bg-slate-50 transition-colors space-y-1">
+              <div
+                key={s.id || s._id}
+                onClick={() => setInspectingStop(s)}
+                title="Bấm để xem chi tiết trạm và bảng điện tử các tuyến xe sắp tới"
+                className="p-3.5 hover:bg-blue-50/60 transition-colors space-y-1 cursor-pointer"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-xs text-[#172B4D] truncate">
                     {idx + 1}. {s.name || s.ten_tram}
@@ -230,6 +237,12 @@ export default function NearbyStopsPage() {
           </MapContainer>
         </div>
       </div>
+
+      <StopDetailModal
+        isOpen={Boolean(inspectingStop)}
+        onClose={() => setInspectingStop(null)}
+        stop={inspectingStop}
+      />
     </div>
   );
 }

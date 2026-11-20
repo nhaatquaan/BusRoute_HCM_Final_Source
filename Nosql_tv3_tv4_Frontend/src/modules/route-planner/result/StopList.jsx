@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MapPin, Navigation, ArrowDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDistance, formatDuration } from '../utils/routeHelpers.js';
 
-export function StopList({ path }) {
+export function StopList({ path, onInspectStop }) {
   const [expandedSegments, setExpandedSegments] = useState({});
 
   if (!path || !path.segments || path.segments.length === 0) {
@@ -102,7 +102,12 @@ export function StopList({ path }) {
 
                       <div className="timeline-stop-content">
                         <div className="stop-name-row">
-                          <span className="timeline-stop-name">
+                          <span
+                            className="timeline-stop-name"
+                            onClick={() => onInspectStop && onInspectStop(stop)}
+                            style={onInspectStop ? { cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cbd5e1' } : undefined}
+                            title="Bấm để xem bảng điện tử và các tuyến đi qua trạm này"
+                          >
                             {stop.tenTram || stop.name}
                           </span>
                           <span className="timeline-stop-code">
