@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2, Route, Download, ExternalLink } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Route, Download, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
 import { routeService } from '../../../services/routeService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
@@ -18,6 +18,13 @@ export default function RoutesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState(null);
   const [deletingRoute, setDeletingRoute] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const showFeedback = (msg, type = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const loadRoutes = async () => {
     setLoading(true);
@@ -50,8 +57,10 @@ export default function RoutesPage() {
   const handleSave = async (payload) => {
     if (editingRoute) {
       await routeService.update(editingRoute.id, payload);
+      showFeedback(`Đã cập nhật thông tin Tuyến ${payload.code} thành công.`);
     } else {
       await routeService.create(payload);
+      showFeedback(`Đã thêm mới Tuyến ${payload.code} (${payload.name}) thành công.`);
     }
     await loadRoutes();
   };
@@ -59,11 +68,16 @@ export default function RoutesPage() {
   const handleDelete = async () => {
     if (!deletingRoute) return;
     try {
+      setDeleting(true);
       await routeService.remove(deletingRoute.id);
+      showFeedback(`Đã xóa Tuyến ${deletingRoute.code} (${deletingRoute.name}) thành công.`);
       setDeletingRoute(null);
       await loadRoutes();
     } catch (err) {
-      alert('Lỗi khi xóa tuyến: ' + err.message);
+      showFeedback('Không thể xóa tuyến xe: ' + err.message, 'error');
+      setDeletingRoute(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -114,6 +128,19 @@ export default function RoutesPage() {
           </Button>
         </div>
       </div>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs font-medium ${
+            feedback.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-[#D9534F]'
+              : 'border-emerald-200 bg-emerald-50 text-[#16866B]'
+          }`}
+        >
+          {feedback.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+          <span>{feedback.msg}</span>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -243,8 +270,9 @@ export default function RoutesPage() {
       {/* Confirm Delete Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deletingRoute)}
-        onClose={() => setDeletingRoute(null)}
+        onClose={() => !deleting && setDeletingRoute(null)}
         onConfirm={handleDelete}
+        loading={deleting}
         title="Xóa tuyến xe buýt"
         message={`Bạn có chắc muốn xóa tuyến "${deletingRoute?.name}" (${deletingRoute?.code})? Mọi quan hệ CO_TRAM và KE_TIEP của tuyến này trong MongoDB sẽ được tự động xóa an toàn.`}
       />

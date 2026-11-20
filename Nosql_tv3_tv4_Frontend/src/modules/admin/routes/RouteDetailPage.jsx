@@ -75,6 +75,25 @@ export default function RouteDetailPage() {
     loadData(direction);
   }, [id, direction]);
 
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
+
+  const handleBackClick = (e) => {
+    if (dirty) {
+      if (!window.confirm('Bạn có thay đổi thứ tự trạm chưa lưu. Bạn có chắc muốn rời khỏi trang và hủy các thay đổi này?')) {
+        e.preventDefault();
+      }
+    }
+  };
+
   const handleDirectionChange = (newDir) => {
     if (dirty) {
       if (!window.confirm('Bạn có thay đổi chưa lưu cho chiều này. Chuyển chiều sẽ làm mất thay đổi?')) {
@@ -196,6 +215,7 @@ export default function RouteDetailPage() {
         <div>
           <Link
             to={`${basePath}/routes`}
+            onClick={handleBackClick}
             className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-[#172B4D]"
           >
             <ArrowLeft size={14} /> Danh sách tuyến xe

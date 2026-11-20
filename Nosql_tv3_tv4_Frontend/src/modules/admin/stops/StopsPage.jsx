@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, MapPin, Download, Filter } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, MapPin, Download, Filter, CheckCircle2, AlertCircle } from 'lucide-react';
 import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
@@ -15,6 +15,13 @@ export default function StopsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingStop, setEditingStop] = useState(null);
   const [deletingStop, setDeletingStop] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const showFeedback = (msg, type = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const loadStops = async () => {
     setLoading(true);
@@ -56,8 +63,10 @@ export default function StopsPage() {
   const handleSave = async (payload) => {
     if (editingStop) {
       await stopService.update(editingStop.id, payload);
+      showFeedback(`Đã cập nhật thông tin trạm "${payload.name}" (${payload.code}) thành công.`);
     } else {
       await stopService.create(payload);
+      showFeedback(`Đã thêm mới trạm dừng "${payload.name}" (${payload.code}) thành công.`);
     }
     await loadStops();
   };
@@ -65,11 +74,16 @@ export default function StopsPage() {
   const handleDelete = async () => {
     if (!deletingStop) return;
     try {
+      setDeleting(true);
       await stopService.remove(deletingStop.id);
+      showFeedback(`Đã xóa trạm dừng "${deletingStop.name}" (${deletingStop.code}) thành công.`);
       setDeletingStop(null);
       await loadStops();
     } catch (err) {
-      alert('Không thể xóa trạm dừng: ' + err.message);
+      showFeedback('Không thể xóa trạm dừng: ' + err.message, 'error');
+      setDeletingStop(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -119,6 +133,19 @@ export default function StopsPage() {
           </Button>
         </div>
       </div>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs font-medium ${
+            feedback.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-[#D9534F]'
+              : 'border-emerald-200 bg-emerald-50 text-[#16866B]'
+          }`}
+        >
+          {feedback.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+          <span>{feedback.msg}</span>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -234,8 +261,9 @@ export default function StopsPage() {
       {/* Confirm Delete Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deletingStop)}
-        onClose={() => setDeletingStop(null)}
+        onClose={() => !deleting && setDeletingStop(null)}
         onConfirm={handleDelete}
+        loading={deleting}
         title="Xóa trạm dừng"
         message={`Bạn có chắc muốn xóa trạm "${deletingStop?.name}" (${deletingStop?.code})? Hành động này sẽ được kiểm tra với các tuyến xe đang liên kết.`}
       />

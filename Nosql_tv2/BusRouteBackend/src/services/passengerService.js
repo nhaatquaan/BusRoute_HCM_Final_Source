@@ -488,7 +488,7 @@ async function getUserPreferences(userId) {
 }
 
 async function updateUserPreferences(userId, prefs = {}) {
-    const validCriteria = ["least_transfers", "fastest", "least_walking"];
+    const validCriteria = ["least_transfers", "fastest", "fewest_stops", "least_walking"];
     const current = await getUserPreferences(userId);
 
     const updated = {

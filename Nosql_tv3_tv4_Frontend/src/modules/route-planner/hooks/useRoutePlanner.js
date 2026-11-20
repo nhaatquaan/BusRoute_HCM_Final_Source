@@ -3,15 +3,20 @@ import routePlannerService from '../services/routePlannerService.js';
 import { authService } from '../../../services/authService';
 import { passengerService } from '../../../services/passengerService';
 
-export function useRoutePlanner() {
+export function useRoutePlanner({
+  defaultCriteria = 'least_transfers',
+  initialFrom = '',
+  initialTo = '',
+  autoSearchTrigger = 0,
+} = {}) {
   const [stopsList, setStopsList] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
   const [stopsLoadError, setStopsLoadError] = useState(null);
 
   // Path finder state
-  const [fromStop, setFromStop] = useState('');
-  const [toStop, setToStop] = useState('');
-  const [criteria, setCriteria] = useState('least_transfers'); // 'least_transfers' | 'fastest' | 'least_walking'
+  const [fromStop, setFromStop] = useState(initialFrom);
+  const [toStop, setToStop] = useState(initialTo);
+  const [criteria, setCriteria] = useState(defaultCriteria); // 'least_transfers' | 'fastest' | 'fewest_stops'
   const [paths, setPaths] = useState([]);
   const [selectedPathIndex, setSelectedPathIndex] = useState(0);
   const [routeInfo, setRouteInfo] = useState(null);
@@ -64,12 +69,16 @@ export function useRoutePlanner() {
   }, [fromStop, toStop]);
 
   // Execute Route Planning
-  const searchRoute = useCallback(async () => {
-    if (!fromStop || !toStop) {
+  const searchRoute = useCallback(async (overrideFrom, overrideTo, overrideCriteria) => {
+    const targetFrom = typeof overrideFrom === 'string' && overrideFrom ? overrideFrom : fromStop;
+    const targetTo = typeof overrideTo === 'string' && overrideTo ? overrideTo : toStop;
+    const targetCriteria = typeof overrideCriteria === 'string' && overrideCriteria ? overrideCriteria : criteria;
+
+    if (!targetFrom || !targetTo) {
       setError('Vui lòng chọn cả trạm xuất phát và trạm đích.');
       return;
     }
-    if (fromStop === toStop) {
+    if (targetFrom === targetTo) {
       setError('Trạm xuất phát và trạm đích không được trùng nhau.');
       return;
     }
@@ -80,7 +89,7 @@ export function useRoutePlanner() {
     setSelectedPathIndex(0);
 
     try {
-      const data = await routePlannerService.planRoute(fromStop, toStop, { criteria });
+      const data = await routePlannerService.planRoute(targetFrom, targetTo, { criteria: targetCriteria });
       setRouteInfo(data);
       setPaths(data.paths || []);
       setIsMock(Boolean(data.isMock));
@@ -91,11 +100,11 @@ export function useRoutePlanner() {
         // Ghi nhận lịch sử tìm kiếm: Nếu đã đăng nhập thì lưu lên MongoDB, nếu là Guest thì lưu LocalStorage (tối đa 5 lượt)
         const primaryPath = data.paths[0];
         const searchPayload = {
-          fromStopId: fromStop,
-          toStopId: toStop,
-          fromStopName: data.from?.name || fromStop,
-          toStopName: data.to?.name || toStop,
-          criteria,
+          fromStopId: targetFrom,
+          toStopId: targetTo,
+          fromStopName: data.from?.name || targetFrom,
+          toStopName: data.to?.name || targetTo,
+          criteria: targetCriteria,
           summaryResult: {
             pathsCount: data.paths.length,
             transfers: primaryPath?.transfers,
@@ -117,6 +126,22 @@ export function useRoutePlanner() {
       setLoading(false);
     }
   }, [fromStop, toStop, criteria]);
+
+  // Đồng bộ defaultCriteria và autoSearch từ bên ngoài (ví dụ Cổng Hành khách)
+  useEffect(() => {
+    if (defaultCriteria) {
+      setCriteria(defaultCriteria);
+    }
+  }, [defaultCriteria]);
+
+  useEffect(() => {
+    if (initialFrom && initialTo && autoSearchTrigger > 0) {
+      setActiveTab('path-finder');
+      setFromStop(initialFrom);
+      setToStop(initialTo);
+      searchRoute(initialFrom, initialTo, criteria);
+    }
+  }, [initialFrom, initialTo, autoSearchTrigger]);
 
   // Execute Search By Stop
   const searchRoutesByStop = useCallback(async (stopId) => {

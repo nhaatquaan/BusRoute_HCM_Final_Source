@@ -9,7 +9,12 @@ import { RouteMap } from './map/RouteMap.jsx';
 import { StopRoutesSearch } from './by-stop/StopRoutesSearch.jsx';
 import './routePlanner.css';
 
-export function RoutePlannerModule() {
+export function RoutePlannerModule({
+  defaultCriteria = 'least_transfers',
+  initialFrom = '',
+  initialTo = '',
+  autoSearchTrigger = 0,
+} = {}) {
   const {
     stopsList,
     loadingStops,
@@ -40,7 +45,12 @@ export function RoutePlannerModule() {
     byStopLoading,
     byStopError,
     searchRoutesByStop,
-  } = useRoutePlanner();
+  } = useRoutePlanner({
+    defaultCriteria,
+    initialFrom,
+    initialTo,
+    autoSearchTrigger,
+  });
 
   const [showMap, setShowMap] = useState(true);
   const [showGraph, setShowGraph] = useState(true);

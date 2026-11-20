@@ -48,6 +48,9 @@ export function RouteSearch({
   const handleApplyPreset = (p) => {
     setFromStop(p.from);
     setToStop(p.to);
+    if (onSearch) {
+      onSearch(p.from, p.to, criteria);
+    }
   };
 
   const getPlaceIcon = (iconName) => {
@@ -69,7 +72,7 @@ export function RouteSearch({
     <div className="route-search-card">
       <div className="search-header">
         <h3>Tìm đường đi bằng xe buýt TP.HCM</h3>
-        <p>Thuật toán đồ thị MongoDB $graphLookup tìm kiếm lộ trình tối ưu và đa tiêu chí</p>
+        <p>Chọn trạm xuất phát và điểm đến để tìm lộ trình di chuyển tối ưu theo nhu cầu của bạn</p>
       </div>
 
       {/* Selectors Grid */}
@@ -228,7 +231,7 @@ export function RouteSearch({
         <button
           type="button"
           className="search-submit-btn"
-          onClick={onSearch}
+          onClick={() => onSearch()}
           disabled={loading || !isReady}
         >
           {loading ? (

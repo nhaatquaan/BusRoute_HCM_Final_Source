@@ -150,11 +150,11 @@ export function CytoscapeGraph() {
           {
             selector: 'edge[type = "CO_TRAM"]',
             style: {
-              'line-color': '#245A85',
-              'target-arrow-color': '#245A85',
+              'line-color': '#94a3b8',
+              'target-arrow-color': '#94a3b8',
               'line-style': 'dashed',
-              'width': 1.5,
-              'label': 'CO_TRAM',
+              'width': 1.2,
+              'opacity': 0.65,
             },
           },
           // Selected Edge

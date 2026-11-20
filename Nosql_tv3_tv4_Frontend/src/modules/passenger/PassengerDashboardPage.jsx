@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { RoutePlannerModule } from '../route-planner';
 import { authService } from '../../services/authService';
 import { passengerService } from '../../services/passengerService';
+import { stopService } from '../../services/stopService';
 import {
   Compass,
   Bot,
@@ -53,8 +54,9 @@ export default function PassengerDashboardPage() {
 
   // Modal: Add/Edit Place
   const [placeModalOpen, setPlaceModalOpen] = useState(false);
-  const [placeForm, setPlaceForm] = useState({ type: 'home', name: '', address: '', nearestStopId: '' });
+  const [placeForm, setPlaceForm] = useState({ type: 'home', name: '', address: '', nearestStopId: '', nearestStopName: '' });
   const [placeSaving, setPlaceSaving] = useState(false);
+  const [allStops, setAllStops] = useState([]);
 
   // Modal: Preferences
   const [prefModalOpen, setPrefModalOpen] = useState(false);
@@ -62,17 +64,32 @@ export default function PassengerDashboardPage() {
 
   // Quick search triggering
   const [plannerKey, setPlannerKey] = useState(1);
+  const [quickRoute, setQuickRoute] = useState({ from: '', to: '', trigger: 0 });
+  const plannerSectionRef = useRef(null);
+
+  const handleQuickPlanRoute = (fromStopId, toStopId) => {
+    if (!fromStopId || !toStopId) return;
+    setQuickRoute((prev) => ({
+      from: fromStopId,
+      to: toStopId,
+      trigger: prev.trigger + 1,
+    }));
+    setTimeout(() => {
+      plannerSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   // Load all passenger data
   const loadPassengerData = useCallback(async () => {
     try {
       setLoading(true);
-      const [recs, places, favs, hist, prefs] = await Promise.all([
+      const [recs, places, favs, hist, prefs, stopsData] = await Promise.all([
         passengerService.getRecommendations().catch(() => null),
         passengerService.getSavedPlaces().catch(() => []),
         passengerService.getFavoriteRoutes().catch(() => []),
         passengerService.getSearchHistory({ limit: 8, page: 1 }).catch(() => ({ data: [] })),
-        passengerService.getPreferences().catch(() => ({ defaultCriteria: 'least_transfers', maxWalkingKm: 1.0 }))
+        passengerService.getPreferences().catch(() => ({ defaultCriteria: 'least_transfers', maxWalkingKm: 1.0 })),
+        stopService.getAll().catch(() => []),
       ]);
 
       setRecommendations(recs);
@@ -81,6 +98,7 @@ export default function PassengerDashboardPage() {
       setSearchHistory(hist?.data || []);
       setPreferences(prefs);
       setPrefForm(prefs);
+      setAllStops(Array.isArray(stopsData) ? stopsData : []);
 
       // Check Guest history in localStorage
       const guestHistory = passengerService.getGuestLocalHistory();
@@ -120,9 +138,16 @@ export default function PassengerDashboardPage() {
     }
     try {
       setPlaceSaving(true);
-      await passengerService.addSavedPlace(placeForm);
+      const matchedStop = allStops.find(
+        (s) => (s.code || s.ma_tram || s.id) === placeForm.nearestStopId
+      );
+      await passengerService.addSavedPlace({
+        ...placeForm,
+        nearestStopId: placeForm.nearestStopId || null,
+        nearestStopName: matchedStop ? (matchedStop.name || matchedStop.ten_tram) : null,
+      });
       setPlaceModalOpen(false);
-      setPlaceForm({ type: 'home', name: '', address: '', nearestStopId: '' });
+      setPlaceForm({ type: 'home', name: '', address: '', nearestStopId: '', nearestStopName: '' });
       showToast(`Đã lưu địa điểm "${placeForm.name}" thành công!`);
       loadPassengerData();
     } catch (err) {
@@ -382,7 +407,8 @@ export default function PassengerDashboardPage() {
               {recommendations.recommendations.map((rec) => (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 p-3 hover:bg-purple-50 transition-colors"
+                  onClick={() => handleQuickPlanRoute(rec.fromStopId, rec.toStopId)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 p-3 hover:bg-purple-50 transition-colors cursor-pointer"
                 >
                   <div className="min-w-0 space-y-0.5">
                     <div className="flex items-center gap-2">
@@ -394,9 +420,16 @@ export default function PassengerDashboardPage() {
                     <p className="text-[11px] text-slate-500 truncate">{rec.explanation}</p>
                   </div>
                   <div className="shrink-0">
-                    <span className="text-[11px] font-bold text-purple-700 flex items-center gap-0.5 hover:underline">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuickPlanRoute(rec.fromStopId, rec.toStopId);
+                      }}
+                      className="text-[11px] font-bold text-purple-700 flex items-center gap-0.5 hover:underline cursor-pointer"
+                    >
                       Xem lộ trình <ArrowRight size={12} />
-                    </span>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -498,11 +531,16 @@ export default function PassengerDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {searchHistory.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr
+                      key={item.id}
+                      onClick={() => handleQuickPlanRoute(item.fromStopId, item.toStopId)}
+                      title="Nhấn để tra cứu lại lộ trình này"
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                    >
                       <td className="py-2.5 text-slate-400 text-[11px] whitespace-nowrap">
                         {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong'}
                       </td>
-                      <td className="py-2.5 font-semibold text-slate-800">
+                      <td className="py-2.5 font-semibold text-slate-800 hover:text-[#245A85]">
                         {item.fromStopName} <ArrowRight size={11} className="inline mx-1 text-slate-400" /> {item.toStopName}
                       </td>
                       <td className="py-2.5">
@@ -515,7 +553,10 @@ export default function PassengerDashboardPage() {
                       </td>
                       <td className="py-2.5 text-right">
                         <button
-                          onClick={() => handleDeleteHistory(item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteHistory(item.id);
+                          }}
                           className="text-slate-300 hover:text-rose-500 p-1"
                           title="Xóa mục này"
                         >
@@ -532,8 +573,14 @@ export default function PassengerDashboardPage() {
       </div>
 
       {/* Embedded Route Planner Component */}
-      <div className="pt-2">
-        <RoutePlannerModule key={plannerKey} defaultCriteria={preferences.defaultCriteria} />
+      <div className="pt-2" ref={plannerSectionRef}>
+        <RoutePlannerModule
+          key={plannerKey}
+          defaultCriteria={preferences.defaultCriteria}
+          initialFrom={quickRoute.from}
+          initialTo={quickRoute.to}
+          autoSearchTrigger={quickRoute.trigger}
+        />
       </div>
 
       {/* Modal: Thêm Địa Điểm */}
@@ -598,6 +645,28 @@ export default function PassengerDashboardPage() {
                   onChange={(e) => setPlaceForm({ ...placeForm, address: e.target.value })}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-emerald-600 focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Trạm xe buýt gần địa điểm này (để chọn nhanh Điểm đi / Điểm đến)
+                </label>
+                <select
+                  value={placeForm.nearestStopId}
+                  onChange={(e) => setPlaceForm({ ...placeForm, nearestStopId: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-emerald-600 focus:outline-none"
+                >
+                  <option value="">-- Chọn trạm dừng gần nhất (tùy chọn) --</option>
+                  {allStops.map((s) => {
+                    const code = s.code || s.ma_tram || s.id;
+                    const name = s.name || s.ten_tram;
+                    return (
+                      <option key={code} value={code}>
+                        {name} ({code})
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

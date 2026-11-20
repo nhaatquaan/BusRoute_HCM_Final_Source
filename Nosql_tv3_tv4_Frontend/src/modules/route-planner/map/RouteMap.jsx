@@ -20,20 +20,31 @@ export function RouteMap({ path }) {
           <div className="map-title-group">
             <h4>
               <Map size={20} color="#2563eb" />
-              <span>Bản đồ Tuyến đường (Leaflet Map - P2)</span>
+              <span>Bản đồ Lộ trình Di chuyển</span>
             </h4>
-            <p>Trực quan hóa địa lý các trạm dừng trên nền bản đồ OpenStreetMap</p>
+            <p>Vị trí các trạm đón trả khách và trạm chuyển tuyến trên bản đồ TP.HCM</p>
           </div>
         </div>
         <div className="map-missing-coords">
           <MapPin size={24} style={{ margin: '0 auto 8px', color: '#94a3b8' }} />
-          <div>Chưa có đủ tọa độ địa lý (GPS Latitude/Longitude) để hiển thị bản đồ.</div>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            Cần bổ sung thuộc tính latitude, longitude cho các trạm trong Vertex Collection TramDung.
-          </span>
+          <div>Chưa có đủ tọa độ địa lý (GPS) để hiển thị bản đồ cho lộ trình này.</div>
         </div>
       </div>
     );
+  }
+
+  // Xác định các trạm chuyển tuyến từ danh sách segments
+  const transferStopIds = new Set();
+  if (Array.isArray(path.segments) && path.segments.length > 1) {
+    for (let i = 0; i < path.segments.length - 1; i++) {
+      const segTo = path.segments[i].toStop;
+      if (segTo) {
+        if (segTo.maTram) transferStopIds.add(segTo.maTram);
+        if (segTo.id) transferStopIds.add(segTo.id);
+        if (segTo._key) transferStopIds.add(segTo._key);
+        if (segTo._id) transferStopIds.add(segTo._id);
+      }
+    }
   }
 
   const centerLat = stopsWithCoords[0].latitude;
@@ -48,9 +59,9 @@ export function RouteMap({ path }) {
         <div className="map-title-group">
           <h4>
             <Map size={20} color="#2563eb" />
-            <span>Bản đồ Tuyến đường (Leaflet Map - P2)</span>
+            <span>Bản đồ Lộ trình Di chuyển</span>
           </h4>
-          <p>Trực quan hóa địa lý các trạm dừng trên nền bản đồ OpenStreetMap</p>
+          <p>Vị trí các trạm đón trả khách và điểm chuyển tuyến trên nền bản đồ OpenStreetMap</p>
         </div>
       </div>
 
@@ -81,6 +92,10 @@ export function RouteMap({ path }) {
           {stopsWithCoords.map((stop, idx) => {
             const isStart = idx === 0;
             const isEnd = idx === stopsWithCoords.length - 1;
+            const isTransfer =
+              !isStart &&
+              !isEnd &&
+              (transferStopIds.has(stop.id) || transferStopIds.has(stop._id));
 
             let fillColor = '#3b82f6';
             let radius = 7;
@@ -90,6 +105,9 @@ export function RouteMap({ path }) {
             } else if (isEnd) {
               fillColor = '#dc2626';
               radius = 10;
+            } else if (isTransfer) {
+              fillColor = '#d97706';
+              radius = 9;
             }
 
             return (
@@ -101,7 +119,7 @@ export function RouteMap({ path }) {
                   fillColor,
                   color: '#ffffff',
                   weight: 2,
-                  fillOpacity: 0.9,
+                  fillOpacity: 0.95,
                 }}
               >
                 <Popup>
@@ -118,7 +136,13 @@ export function RouteMap({ path }) {
                       </div>
                     )}
                     <div style={{ fontSize: '11px', fontWeight: 'bold', marginTop: '4px', color: fillColor }}>
-                      {isStart ? '🟢 Trạm xuất phát' : isEnd ? '🔴 Trạm đích đến' : `Trạm số ${idx + 1}`}
+                      {isStart
+                        ? '🟢 Trạm xuất phát'
+                        : isEnd
+                        ? '🔴 Trạm đích đến'
+                        : isTransfer
+                        ? '🟠 Trạm chuyển tuyến (Đổi xe tại đây)'
+                        : `🔵 Trạm trung gian số ${idx + 1}`}
                     </div>
                   </div>
                 </Popup>

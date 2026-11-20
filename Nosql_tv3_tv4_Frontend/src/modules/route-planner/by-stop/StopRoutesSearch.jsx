@@ -26,7 +26,7 @@ export function StopRoutesSearch({
         <div className="by-stop-header">
           <h3>Tra cứu tuyến xe buýt đi qua một trạm</h3>
           <p>
-            Chọn trạm dừng để truy vấn quan hệ CO_TRAM trong MongoDB và hiển thị danh sách các tuyến xe kết nối
+            Chọn trạm dừng bất kỳ để xem toàn bộ các tuyến xe buýt có đón trả khách tại trạm đó kèm giờ hoạt động và giá vé
           </p>
         </div>
 

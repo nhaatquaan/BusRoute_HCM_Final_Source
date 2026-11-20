@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Lock, Unlock, Search, Shield, Wrench, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Lock, Unlock, Search, Shield, Wrench, User, CheckCircle2, AlertCircle } from 'lucide-react';
 import { userService } from '../../../services/userService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
@@ -16,6 +16,13 @@ export default function UsersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const showFeedback = (msg, type = 'success') => {
+    setFeedback({ msg, type });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const loadUsers = async () => {
     setLoading(true);
@@ -61,8 +68,10 @@ export default function UsersPage() {
   const handleSave = async (payload) => {
     if (editingUser) {
       await userService.update(editingUser.id, payload);
+      showFeedback(`Đã cập nhật tài khoản "${payload.fullName || editingUser.username}" thành công.`);
     } else {
       await userService.create(payload);
+      showFeedback(`Đã tạo tài khoản "${payload.username}" thành công.`);
     }
     await loadUsers();
   };
@@ -72,20 +81,30 @@ export default function UsersPage() {
     const nextStatus = isCurrentlyActive ? 'locked' : 'active';
     try {
       await userService.update(user.id, { status: nextStatus });
+      showFeedback(
+        nextStatus === 'locked'
+          ? `Đã khóa tài khoản "${user.username}".`
+          : `Đã mở khóa tài khoản "${user.username}".`
+      );
       await loadUsers();
     } catch (err) {
-      alert(err.message || 'Lỗi khi cập nhật trạng thái tài khoản');
+      showFeedback(err.message || 'Lỗi khi cập nhật trạng thái tài khoản', 'error');
     }
   };
 
   const handleDelete = async () => {
     if (!deletingUser) return;
     try {
+      setDeleting(true);
       await userService.remove(deletingUser.id);
+      showFeedback(`Đã xóa tài khoản "${deletingUser.username}" khỏi hệ thống.`);
       setDeletingUser(null);
       await loadUsers();
     } catch (err) {
-      alert(err.message || 'Lỗi khi xóa tài khoản');
+      showFeedback(err.message || 'Lỗi khi xóa tài khoản', 'error');
+      setDeletingUser(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -133,6 +152,19 @@ export default function UsersPage() {
           <Plus size={14} /> Tạo tài khoản mới
         </Button>
       </div>
+
+      {feedback && (
+        <div
+          className={`flex items-center gap-2 rounded-xl border p-3.5 text-xs font-medium ${
+            feedback.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-[#D9534F]'
+              : 'border-emerald-200 bg-emerald-50 text-[#16866B]'
+          }`}
+        >
+          {feedback.type === 'error' ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+          <span>{feedback.msg}</span>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -279,10 +311,10 @@ export default function UsersPage() {
         isOpen={Boolean(deletingUser)}
         title="Xác nhận xóa tài khoản"
         message={`Bạn có chắc chắn muốn xóa tài khoản "${deletingUser?.fullName || deletingUser?.username}" khỏi cơ sở dữ liệu MongoDB? Thao tác này không thể hoàn tác.`}
-        confirmText="Xóa tài khoản"
-        variant="danger"
+        confirmLabel="Xóa tài khoản"
+        loading={deleting}
         onConfirm={handleDelete}
-        onCancel={() => setDeletingUser(null)}
+        onClose={() => !deleting && setDeletingUser(null)}
       />
     </div>
   );
