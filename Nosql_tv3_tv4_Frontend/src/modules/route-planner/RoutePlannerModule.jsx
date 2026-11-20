@@ -9,6 +9,7 @@ import { RouteMap } from './map/RouteMap.jsx';
 import { StopRoutesSearch } from './by-stop/StopRoutesSearch.jsx';
 import { RouteComparison } from './compare/RouteComparison.jsx';
 import { StopDetailModal } from './by-stop/StopDetailModal.jsx';
+import { findNearestStopsFromCoords } from './utils/routeHelpers.js';
 import NetworkAnalyticsPage from '../admin/analytics/NetworkAnalyticsPage.jsx';
 import './routePlanner.css';
 
@@ -74,6 +75,38 @@ export function RoutePlannerModule({
           s._key === stopId
       ) || stopObj;
     setInspectingStop(fullStop);
+  };
+
+  // Khi người dùng click trực tiếp một điểm trên Bản đồ làm Điểm đi hoặc Điểm đến (giống Google Maps)
+  const handleMapPinSelection = (pinData, isOrigin = true) => {
+    const nearestList = findNearestStopsFromCoords(pinData.lat, pinData.lng, stopsList, 2);
+    if (nearestList.length === 0) return;
+    const best = nearestList[0];
+    const walkInfo = {
+      placeName: pinData.name,
+      placeAddress: pinData.address,
+      lat: pinData.lat,
+      lng: pinData.lng,
+      nearestStopId: best.stopId,
+      nearestStopName: best.stopName,
+      distanceMeters: best.distanceMeters,
+      walkMinutes: best.walkMinutes,
+      alternativeStop: nearestList[1] || null,
+    };
+
+    if (isOrigin) {
+      setFromStop(best.stopId);
+      setOriginWalkInfo(walkInfo);
+      if (toStop && toStop !== best.stopId) {
+        searchRoute(best.stopId, toStop, criteria);
+      }
+    } else {
+      setToStop(best.stopId);
+      setDestWalkInfo(walkInfo);
+      if (fromStop && fromStop !== best.stopId) {
+        searchRoute(fromStop, best.stopId, criteria);
+      }
+    }
   };
 
   return (
@@ -304,13 +337,16 @@ export function RoutePlannerModule({
             />
           )}
 
-          {/* Leaflet Map Visualization */}
-          {showMap && selectedPath && (
+          {/* Leaflet Map Visualization - LUÔN MỞ SẴN GIỐNG GOOGLE MAPS ĐỂ XEM XE BUÝT CHẠY TRỰC TIẾP */}
+          {showMap && (
             <RouteMap
               path={selectedPath}
+              allStops={stopsList}
               originWalkInfo={originWalkInfo}
               destWalkInfo={destWalkInfo}
               onInspectStop={handleOpenStopDetail}
+              onPinSelectAsOrigin={(pin) => handleMapPinSelection(pin, true)}
+              onPinSelectAsDestination={(pin) => handleMapPinSelection(pin, false)}
             />
           )}
         </div>

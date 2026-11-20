@@ -77,6 +77,23 @@ export function RouteSearch({
     }
   }, []);
 
+  // Tự động gợi ý địa chỉ trực tiếp theo từng chữ gõ (Live Debounced Autocomplete giống Google Maps)
+  useEffect(() => {
+    if (!originQuery || originQuery.trim().length < 3 || !originDropdownOpen) return;
+    const timer = setTimeout(() => {
+      searchOpenStreetMapAddress(originQuery, true);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [originQuery, originDropdownOpen]);
+
+  useEffect(() => {
+    if (!destQuery || destQuery.trim().length < 3 || !destDropdownOpen) return;
+    const timer = setTimeout(() => {
+      searchOpenStreetMapAddress(destQuery, false);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [destQuery, destDropdownOpen]);
+
   const presets = [
     {
       label: '📍 401 Lê Đức Thọ ➔ ĐH Công Thương TP.HCM',
