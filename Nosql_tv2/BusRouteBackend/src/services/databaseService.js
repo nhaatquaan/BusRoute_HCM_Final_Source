@@ -4,8 +4,10 @@ const { db, client, ensureDocumentKeys, buildIdFilter } = require("../config/dat
 
 const COLLECTIONS = ["TuyenXe", "TramDung", "NguoiDung", "CO_TRAM", "KE_TIEP", "BusRouteGraph"];
 
-// Thư mục lưu trữ backup an toàn
-const BACKUP_DIR = path.resolve(__dirname, "../../../../Nosql_tv1_Database/backup");
+// Thư mục lưu trữ backup an toàn (Hỗ trợ cả monorepo local và khi deploy riêng lẻ trên Render)
+const MONOREPO_BACKUP_DIR = path.resolve(__dirname, "../../../../Nosql_tv1_Database/backup");
+const LOCAL_BACKUP_DIR = path.resolve(__dirname, "../../backups");
+const BACKUP_DIR = fs.existsSync(MONOREPO_BACKUP_DIR) ? MONOREPO_BACKUP_DIR : LOCAL_BACKUP_DIR;
 const DATA_JSON_DIR = path.resolve(__dirname, "../../../../Nosql_tv1_Database/data/json");
 const DATA_CSV_DIR = path.resolve(__dirname, "../../../../Nosql_tv1_Database/data/csv");
 
@@ -665,14 +667,15 @@ const restoreFromBackup = async (filename) => {
 
     const content = fs.readFileSync(filePath, "utf8");
     const data = JSON.parse(content);
+    const collectionsPayload = data.collections || data.data;
 
-    if (!data.collections || typeof data.collections !== "object") {
+    if (!collectionsPayload || typeof collectionsPayload !== "object") {
         throw new Error("Cấu trúc file backup không đúng định dạng BusRouteDB");
     }
 
     const restoredCounts = {};
 
-    for (const [colName, docs] of Object.entries(data.collections)) {
+    for (const [colName, docs] of Object.entries(collectionsPayload)) {
         if (!COLLECTIONS.includes(colName)) continue;
         const col = db.collection(colName);
         await col.deleteMany({});

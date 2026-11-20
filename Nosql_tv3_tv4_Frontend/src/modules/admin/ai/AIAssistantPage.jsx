@@ -15,7 +15,7 @@ import {
   RotateCcw,
   Clock
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { aiService } from '../../../services/aiService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
@@ -29,6 +29,14 @@ const SAMPLE_QUESTIONS = [
 
 export default function AIAssistantPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const plannerPath = location.pathname.startsWith('/operator')
+    ? '/operator/planner'
+    : location.pathname.startsWith('/portal')
+    ? '/portal/planner'
+    : location.pathname.startsWith('/admin')
+    ? '/admin/route-planner'
+    : '/';
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -255,7 +263,7 @@ export default function AIAssistantPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => navigate('/admin/route-planner')}
+                        onClick={() => navigate(plannerPath)}
                         className="text-[11px]"
                       >
                         <Navigation size={12} /> Xem trên Bản đồ

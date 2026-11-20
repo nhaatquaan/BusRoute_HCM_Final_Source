@@ -4,8 +4,8 @@ const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb:/
 const MONGO_DATABASE = process.env.DB_NAME || process.env.MONGO_DATABASE || "BusRouteDB";
 
 const client = new MongoClient(MONGO_URI, {
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
     maxPoolSize: 10
 });
 

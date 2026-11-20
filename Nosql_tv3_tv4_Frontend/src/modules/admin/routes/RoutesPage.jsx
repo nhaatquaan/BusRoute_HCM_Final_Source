@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Plus, Search, Pencil, Trash2, Route, Download, ExternalLink } from 'lucide-react';
 import { routeService } from '../../../services/routeService';
 import Button from '../../../components/Button';
@@ -8,6 +8,8 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import RouteFormModal from './RouteFormModal';
 
 export default function RoutesPage() {
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/operator') ? '/operator' : '/admin';
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
@@ -166,7 +168,7 @@ export default function RoutesPage() {
                   </td>
                   <td className="px-5 py-3.5 font-semibold text-[#172B4D]">
                     <Link
-                      to={`/admin/routes/${route.id || route._key}`}
+                      to={`${basePath}/routes/${route.id || route._key}`}
                       className="hover:text-[#245A85] hover:underline"
                     >
                       {route.name || route.ten_tuyen}
@@ -189,7 +191,7 @@ export default function RoutesPage() {
                   <td className="px-5 py-3.5 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <Link
-                        to={`/admin/routes/${route.id || route._key}`}
+                        to={`${basePath}/routes/${route.id || route._key}`}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-[#245A85]"
                         title="Quản lý thứ tự trạm trên tuyến"
                       >

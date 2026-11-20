@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowUp,
@@ -36,6 +36,8 @@ const stopMarkerIcon = new L.Icon({
 
 export default function RouteDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/operator') ? '/operator' : '/admin';
   const [route, setRoute] = useState(null);
   const [allStops, setAllStops] = useState([]);
   const [direction, setDirection] = useState('luot_di'); // 'luot_di' | 'luot_ve'
@@ -172,7 +174,7 @@ export default function RouteDetailPage() {
       <div className="rounded-xl border border-rose-200 bg-white p-6 shadow-xs">
         <p className="text-sm text-rose-700 font-medium">{error}</p>
         <Link
-          to="/admin/routes"
+          to={`${basePath}/routes`}
           className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#245A85] hover:underline"
         >
           <ArrowLeft size={16} /> Quay lại danh sách tuyến
@@ -193,7 +195,7 @@ export default function RouteDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link
-            to="/admin/routes"
+            to={`${basePath}/routes`}
             className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-[#172B4D]"
           >
             <ArrowLeft size={14} /> Danh sách tuyến xe

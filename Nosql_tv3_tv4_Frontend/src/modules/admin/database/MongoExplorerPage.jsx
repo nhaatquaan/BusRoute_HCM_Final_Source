@@ -110,7 +110,8 @@ export default function MongoExplorerPage() {
     try {
       const parsed = JSON.parse(docJsonText);
       if (editingDoc) {
-        await databaseService.updateDocument(selectedCol, editingDoc._id || editingDoc._key, parsed);
+        const docIdentifier = encodeURIComponent(editingDoc._key || editingDoc._id);
+        await databaseService.updateDocument(selectedCol, docIdentifier, parsed);
         setActionSuccess('Cập nhật document thành công');
       } else {
         await databaseService.createDocument(selectedCol, parsed);
@@ -129,7 +130,8 @@ export default function MongoExplorerPage() {
       return;
     }
     try {
-      await databaseService.deleteDocument(selectedCol, doc._id || doc._key);
+      const docIdentifier = encodeURIComponent(doc._key || doc._id);
+      await databaseService.deleteDocument(selectedCol, docIdentifier);
       setActionSuccess('Xóa document thành công');
       loadDocuments(selectedCol, page, search);
       loadCollections();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeftRight, Search, Loader2, Sparkles, MapPin, Zap, Shuffle, Footprints, Home, Briefcase, GraduationCap } from 'lucide-react';
+import { ArrowLeftRight, Search, Loader2, Sparkles, MapPin, Zap, Shuffle, Footprints, Milestone, Home, Briefcase, GraduationCap } from 'lucide-react';
 import { StopSelector } from './StopSelector.jsx';
 import { authService } from '../../../services/authService';
 import { passengerService } from '../../../services/passengerService';

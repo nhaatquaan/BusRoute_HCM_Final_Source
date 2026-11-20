@@ -6,9 +6,12 @@
  */
 const fs = require("fs");
 const path = require("path");
+require("../../Nosql_tv2/BusRouteBackend/node_modules/dotenv").config({
+  path: path.resolve(__dirname, "../../Nosql_tv2/BusRouteBackend/.env")
+});
 const { MongoClient } = require("../../Nosql_tv2/BusRouteBackend/node_modules/mongodb");
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017";
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://localhost:27017";
 const DB_NAME = process.env.MONGO_DATABASE || "BusRouteDB";
 
 async function restoreDatabase() {
