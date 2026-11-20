@@ -24,7 +24,10 @@ import {
   HCM_POPULAR_LOCATIONS,
   findNearestStopsFromCoords,
   removeVietnameseTones,
+  resolveAddressToCoords,
+  formatDistance,
 } from '../utils/routeHelpers.js';
+import routePlannerService from '../services/routePlannerService.js';
 import './search.css';
 
 export function RouteSearch({
@@ -44,7 +47,8 @@ export function RouteSearch({
   setDestWalkInfo,
 }) {
   const [savedPlaces, setSavedPlaces] = useState([]);
-  const [smartMode, setSmartMode] = useState(false);
+  // Mặc định BẬT chế độ Tìm theo Vị trí / Địa chỉ & Định vị GPS
+  const [smartMode, setSmartMode] = useState(true);
 
   // Smart location search state
   const [originQuery, setOriginQuery] = useState('');
@@ -52,6 +56,9 @@ export function RouteSearch({
   const [originDropdownOpen, setOriginDropdownOpen] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [resolvingBoth, setResolvingBoth] = useState(false);
+  const [originStopRoutes, setOriginStopRoutes] = useState([]);
+  const [destStopRoutes, setDestStopRoutes] = useState([]);
   const [nominatimOriginResults, setNominatimOriginResults] = useState([]);
   const [nominatimDestResults, setNominatimDestResults] = useState([]);
   const [searchingNominatimOrigin, setSearchingNominatimOrigin] = useState(false);
@@ -71,10 +78,15 @@ export function RouteSearch({
   }, []);
 
   const presets = [
+    {
+      label: '📍 401 Lê Đức Thọ ➔ ĐH Công Thương TP.HCM',
+      originText: '401 Lê Đức Thọ, Gò Vấp',
+      destText: 'Đại học Công Thương TP.HCM',
+      isAddressPreset: true,
+    },
     { label: 'Bến Thành ➔ BX Chợ Lớn (Tuyến 01)', from: 'TR_01', to: 'TR_08' },
     { label: 'Bến Thành ➔ ĐH Quốc Gia (Tuyến 19)', from: 'TR_01', to: 'TR_20' },
     { label: 'BX Chợ Lớn ➔ Sân bay TSN (Chuyển tuyến)', from: 'TR_08', to: 'TR_13' },
-    { label: 'Bến Thành ➔ Thạnh Lộc (Tuyến 03)', from: 'TR_01', to: 'TR_25' },
   ];
 
   const criteriaOptions = [
@@ -83,9 +95,128 @@ export function RouteSearch({
     { id: 'fewest_stops', label: 'Ít trạm dừng nhất', icon: Milestone, desc: 'Ưu tiên số trạm dừng trung gian ít nhất' },
   ];
 
+  // Truy vấn danh sách các tuyến xe đi qua 1 bến để hiển thị trong hộp đề xuất bến gần nhất
+  const fetchRoutesForSuggestedStop = async (stopId, isOrigin = true) => {
+    if (!stopId) return;
+    try {
+      const res = await routePlannerService.searchByStop(stopId);
+      const uniqueRoutes = [];
+      const seen = new Set();
+      (res?.routes || []).forEach((r) => {
+        if (r.maTuyen && !seen.has(r.maTuyen)) {
+          seen.add(r.maTuyen);
+          uniqueRoutes.push(r);
+        }
+      });
+      if (isOrigin) setOriginStopRoutes(uniqueRoutes);
+      else setDestStopRoutes(uniqueRoutes);
+    } catch (_) {}
+  };
+
+  // Hàm cốt lõi: Người dùng chỉ cần gõ 2 địa chỉ bất kỳ (VD: "401 Lê Đức Thọ" và "Đại học Công Thương TP.HCM")
+  // rồi bấm "Tìm lộ trình" -> Tự động định vị GPS cả 2 nơi, tìm 2 bến gần nhất và tìm tuyến xe đi giữa 2 bến đó!
+  const handleSmartResolveAndSearch = async (customOriginText, customDestText) => {
+    const textA = (customOriginText !== undefined ? customOriginText : originQuery).trim();
+    const textB = (customDestText !== undefined ? customDestText : destQuery).trim();
+
+    if (!smartMode) {
+      if (onSearch) onSearch(fromStop, toStop, criteria);
+      return;
+    }
+
+    // Nếu người dùng đã có sẵn fromStop & toStop mà không nhập chữ mới
+    if (!textA && !textB && fromStop && toStop) {
+      if (onSearch) onSearch(fromStop, toStop, criteria);
+      return;
+    }
+
+    try {
+      setResolvingBoth(true);
+      setOriginDropdownOpen(false);
+      setDestDropdownOpen(false);
+
+      let finalFromStopId = fromStop;
+      let finalToStopId = toStop;
+
+      // 1. Định vị GPS cho Điểm xuất phát (nếu có nhập textA)
+      if (textA) {
+        const resolvedA = await resolveAddressToCoords(textA, stops);
+        if (resolvedA) {
+          const nearestA = findNearestStopsFromCoords(resolvedA.lat, resolvedA.lng, stops, 3);
+          if (nearestA.length > 0) {
+            const bestA = nearestA[0];
+            finalFromStopId = bestA.stopId;
+            setFromStop(bestA.stopId);
+            const walkA = {
+              placeName: textA,
+              resolvedLabel: resolvedA.resolvedLabel || textA,
+              placeAddress: resolvedA.placeAddress,
+              lat: resolvedA.lat,
+              lng: resolvedA.lng,
+              nearestStopId: bestA.stopId,
+              nearestStopName: bestA.stopName,
+              distanceMeters: bestA.distanceMeters,
+              walkMinutes: bestA.walkMinutes,
+              alternativeStop: nearestA[1] || null,
+            };
+            if (setOriginWalkInfo) setOriginWalkInfo(walkA);
+            fetchRoutesForSuggestedStop(bestA.stopId, true);
+          }
+        }
+      }
+
+      // 2. Định vị GPS cho Điểm đến (nếu có nhập textB)
+      if (textB) {
+        const resolvedB = await resolveAddressToCoords(textB, stops);
+        if (resolvedB) {
+          const nearestB = findNearestStopsFromCoords(resolvedB.lat, resolvedB.lng, stops, 3);
+          if (nearestB.length > 0) {
+            // Nếu bến gần nhất của Điểm đến vô tình trùng với bến của Điểm đi thì lấy bến gần thứ 2
+            let bestB = nearestB[0];
+            if (bestB.stopId === finalFromStopId && nearestB.length > 1) {
+              bestB = nearestB[1];
+            }
+            finalToStopId = bestB.stopId;
+            setToStop(bestB.stopId);
+            const walkB = {
+              placeName: textB,
+              resolvedLabel: resolvedB.resolvedLabel || textB,
+              placeAddress: resolvedB.placeAddress,
+              lat: resolvedB.lat,
+              lng: resolvedB.lng,
+              nearestStopId: bestB.stopId,
+              nearestStopName: bestB.stopName,
+              distanceMeters: bestB.distanceMeters,
+              walkMinutes: bestB.walkMinutes,
+              alternativeStop: nearestB.find((s) => s.stopId !== bestB.stopId) || null,
+            };
+            if (setDestWalkInfo) setDestWalkInfo(walkB);
+            fetchRoutesForSuggestedStop(bestB.stopId, false);
+          }
+        }
+      }
+
+      // 3. Tự động gọi thuật toán tìm lộ trình giữa 2 bến vừa định vị được
+      if (finalFromStopId && finalToStopId && onSearch) {
+        onSearch(finalFromStopId, finalToStopId, criteria);
+      }
+    } finally {
+      setResolvingBoth(false);
+    }
+  };
+
   const handleApplyPreset = (p) => {
+    if (p.isAddressPreset) {
+      setSmartMode(true);
+      setOriginQuery(p.originText);
+      setDestQuery(p.destText);
+      handleSmartResolveAndSearch(p.originText, p.destText);
+      return;
+    }
     setFromStop(p.from);
     setToStop(p.to);
+    setOriginQuery('');
+    setDestQuery('');
     if (setOriginWalkInfo) setOriginWalkInfo(null);
     if (setDestWalkInfo) setDestWalkInfo(null);
     if (onSearch) {
@@ -148,6 +279,7 @@ export function RouteSearch({
       setOriginDropdownOpen(false);
       setFromStop(best.stopId);
       if (setOriginWalkInfo) setOriginWalkInfo(walkData);
+      fetchRoutesForSuggestedStop(best.stopId, true);
       if (toStop && toStop !== best.stopId && onSearch) {
         onSearch(best.stopId, toStop, criteria);
       }
@@ -156,6 +288,7 @@ export function RouteSearch({
       setDestDropdownOpen(false);
       setToStop(best.stopId);
       if (setDestWalkInfo) setDestWalkInfo(walkData);
+      fetchRoutesForSuggestedStop(best.stopId, false);
       if (fromStop && fromStop !== best.stopId && onSearch) {
         onSearch(fromStop, best.stopId, criteria);
       }
@@ -223,7 +356,9 @@ export function RouteSearch({
     }
   };
 
-  const isReady = fromStop && toStop && fromStop !== toStop;
+  const isReady = smartMode
+    ? Boolean((originQuery.trim() || fromStop) && (destQuery.trim() || toStop))
+    : Boolean(fromStop && toStop && fromStop !== toStop);
 
   return (
     <div className="route-search-card">
@@ -342,7 +477,13 @@ export function RouteSearch({
                     setOriginQuery(e.target.value);
                     setOriginDropdownOpen(true);
                   }}
-                  placeholder="VD: Dinh Độc Lập, ĐH Bách Khoa, BV Chợ Rẫy..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSmartResolveAndSearch();
+                    }
+                  }}
+                  placeholder="Gõ địa chỉ bất kỳ (VD: 401 Lê Đức Thọ, Dinh Độc Lập...)"
                   style={{
                     width: '100%',
                     padding: '9px 12px',
@@ -424,32 +565,54 @@ export function RouteSearch({
 
               {/* Kết quả đề xuất trạm gần Điểm đi */}
               {originWalkInfo && (
-                <div style={{ marginTop: '6px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '8px', padding: '7px 10px', fontSize: '0.75rem', color: '#14532d' }}>
+                <div style={{ marginTop: '8px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', padding: '9px 12px', fontSize: '0.76rem', color: '#14532d' }}>
                   <div>
-                    🚶 Từ <strong>{originWalkInfo.placeName}</strong> ➔ Đi bộ{' '}
-                    <strong>{originWalkInfo.distanceMeters}m (~{originWalkInfo.walkMinutes} phút)</strong> tới trạm gần nhất:{' '}
-                    <strong style={{ textDecoration: 'underline' }}>
-                      {originWalkInfo.nearestStopName} ({originWalkInfo.nearestStopId})
-                    </strong>
+                    🟢 <strong>Bến đón gần nhất từ &quot;{originWalkInfo.placeName}&quot;:</strong>
+                    <div style={{ marginTop: '3px', fontSize: '0.82rem', fontWeight: 800, color: '#166534' }}>
+                      🚏 {originWalkInfo.nearestStopName} ({originWalkInfo.nearestStopId}) — Cách {formatDistance(originWalkInfo.distanceMeters)} (~{originWalkInfo.walkMinutes} phút)
+                    </div>
                   </div>
+                  {originStopRoutes.length > 0 && (
+                    <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>Các tuyến đón tại bến này:</span>
+                      {originStopRoutes.map((r) => (
+                        <span
+                          key={r.maTuyen}
+                          style={{
+                            background: r.mauSac || '#15803d',
+                            color: '#fff',
+                            padding: '1px 7px',
+                            borderRadius: '999px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          Tuyến {r.maTuyen}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {originWalkInfo.alternativeStop && (
-                    <div style={{ marginTop: '3px', fontSize: '0.7rem', color: '#166534' }}>
-                      Trạm gần thứ 2: {originWalkInfo.alternativeStop.stopName} (cách {originWalkInfo.alternativeStop.distanceMeters}m){' '}
+                    <div style={{ marginTop: '5px', fontSize: '0.71rem', color: '#166534' }}>
+                      Bến gần thứ 2: <strong>{originWalkInfo.alternativeStop.stopName}</strong> (cách {formatDistance(originWalkInfo.alternativeStop.distanceMeters)}){' '}
                       <button
                         type="button"
                         onClick={() => {
-                          setFromStop(originWalkInfo.alternativeStop.stopId);
+                          const alt = originWalkInfo.alternativeStop;
+                          setFromStop(alt.stopId);
                           setOriginWalkInfo({
                             ...originWalkInfo,
-                            nearestStopId: originWalkInfo.alternativeStop.stopId,
-                            nearestStopName: originWalkInfo.alternativeStop.stopName,
-                            distanceMeters: originWalkInfo.alternativeStop.distanceMeters,
-                            walkMinutes: originWalkInfo.alternativeStop.walkMinutes,
+                            nearestStopId: alt.stopId,
+                            nearestStopName: alt.stopName,
+                            distanceMeters: alt.distanceMeters,
+                            walkMinutes: alt.walkMinutes,
                           });
+                          fetchRoutesForSuggestedStop(alt.stopId, true);
+                          if (toStop && onSearch) onSearch(alt.stopId, toStop, criteria);
                         }}
                         style={{ border: 'none', background: 'transparent', color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
                       >
-                        Đổi sang trạm này
+                        Đổi sang bến này
                       </button>
                     </div>
                   )}
@@ -471,7 +634,13 @@ export function RouteSearch({
                     setDestQuery(e.target.value);
                     setDestDropdownOpen(true);
                   }}
-                  placeholder="VD: Sân bay Tân Sơn Nhất, Landmark 81, ĐHQG..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSmartResolveAndSearch();
+                    }
+                  }}
+                  placeholder="Gõ điểm đến bất kỳ (VD: Đại học Công Thương TP.HCM...)"
                   style={{
                     width: '100%',
                     padding: '9px 12px',
@@ -553,15 +722,57 @@ export function RouteSearch({
 
               {/* Kết quả đề xuất trạm gần Điểm đến */}
               {destWalkInfo && (
-                <div style={{ marginTop: '6px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '7px 10px', fontSize: '0.75rem', color: '#7f1d1d' }}>
+                <div style={{ marginTop: '8px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '9px 12px', fontSize: '0.76rem', color: '#7f1d1d' }}>
                   <div>
-                    下車 Xuống xe tại trạm gần nhất:{' '}
-                    <strong style={{ textDecoration: 'underline' }}>
-                      {destWalkInfo.nearestStopName} ({destWalkInfo.nearestStopId})
-                    </strong>{' '}
-                    ➔ Đi bộ <strong>{destWalkInfo.distanceMeters}m (~{destWalkInfo.walkMinutes} phút)</strong> tới{' '}
-                    <strong>{destWalkInfo.placeName}</strong>
+                    🔴 <strong>Bến xuống gần nhất tới &quot;{destWalkInfo.placeName}&quot;:</strong>
+                    <div style={{ marginTop: '3px', fontSize: '0.82rem', fontWeight: 800, color: '#991b1b' }}>
+                      🚏 {destWalkInfo.nearestStopName} ({destWalkInfo.nearestStopId}) — Cách {formatDistance(destWalkInfo.distanceMeters)} (~{destWalkInfo.walkMinutes} phút)
+                    </div>
                   </div>
+                  {destStopRoutes.length > 0 && (
+                    <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>Các tuyến đi tới bến này:</span>
+                      {destStopRoutes.map((r) => (
+                        <span
+                          key={r.maTuyen}
+                          style={{
+                            background: r.mauSac || '#b91c1c',
+                            color: '#fff',
+                            padding: '1px 7px',
+                            borderRadius: '999px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          Tuyến {r.maTuyen}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {destWalkInfo.alternativeStop && (
+                    <div style={{ marginTop: '5px', fontSize: '0.71rem', color: '#991b1b' }}>
+                      Bến gần thứ 2: <strong>{destWalkInfo.alternativeStop.stopName}</strong> (cách {formatDistance(destWalkInfo.alternativeStop.distanceMeters)}){' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const alt = destWalkInfo.alternativeStop;
+                          setToStop(alt.stopId);
+                          setDestWalkInfo({
+                            ...destWalkInfo,
+                            nearestStopId: alt.stopId,
+                            nearestStopName: alt.stopName,
+                            distanceMeters: alt.distanceMeters,
+                            walkMinutes: alt.walkMinutes,
+                          });
+                          fetchRoutesForSuggestedStop(alt.stopId, false);
+                          if (fromStop && onSearch) onSearch(fromStop, alt.stopId, criteria);
+                        }}
+                        style={{ border: 'none', background: 'transparent', color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Đổi sang bến này
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -738,18 +949,18 @@ export function RouteSearch({
         <button
           type="button"
           className="search-submit-btn"
-          onClick={() => onSearch()}
-          disabled={loading || !isReady}
+          onClick={() => handleSmartResolveAndSearch()}
+          disabled={loading || resolvingBoth || !isReady}
         >
-          {loading ? (
+          {loading || resolvingBoth ? (
             <>
               <Loader2 size={18} className="spinner" />
-              <span>Đang tìm kiếm...</span>
+              <span>{resolvingBoth ? 'Đang định vị GPS & tìm bến gần nhất...' : 'Đang tìm tuyến xe...'}</span>
             </>
           ) : (
             <>
               <Search size={18} />
-              <span>Tìm lộ trình</span>
+              <span>{smartMode ? 'Định vị 2 bến gần nhất & Tìm tuyến' : 'Tìm lộ trình'}</span>
             </>
           )}
         </button>
