@@ -92,12 +92,17 @@ export default function PassengerDashboardPage() {
         stopService.getAll().catch(() => []),
       ]);
 
+      const safePrefs =
+        prefs && typeof prefs === 'object'
+          ? prefs
+          : { defaultCriteria: 'least_transfers', maxWalkingKm: 1.0 };
+
       setRecommendations(recs);
-      setSavedPlaces(places);
-      setFavoriteRoutes(favs);
-      setSearchHistory(hist?.data || []);
-      setPreferences(prefs);
-      setPrefForm(prefs);
+      setSavedPlaces(Array.isArray(places) ? places : []);
+      setFavoriteRoutes(Array.isArray(favs) ? favs : []);
+      setSearchHistory(Array.isArray(hist?.data) ? hist.data : []);
+      setPreferences(safePrefs);
+      setPrefForm(safePrefs);
       setAllStops(Array.isArray(stopsData) ? stopsData : []);
 
       // Check Guest history in localStorage

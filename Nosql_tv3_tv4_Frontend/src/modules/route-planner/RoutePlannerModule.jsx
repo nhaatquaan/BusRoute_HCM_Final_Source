@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bus, Navigation, Network, Map, Search, Database, Layers, Scale, BarChart3 } from 'lucide-react';
+import { Bus, Navigation, Network, Map as MapIcon, Search, Database, Layers, Scale, BarChart3 } from 'lucide-react';
 import { useRoutePlanner } from './hooks/useRoutePlanner.js';
 import { RouteSearch } from './search/RouteSearch.jsx';
 import { RouteResult } from './result/RouteResult.jsx';
@@ -321,7 +321,7 @@ export function RoutePlannerModule({
                 className={`toggle-chip-btn ${showMap ? 'active' : ''}`}
                 onClick={() => setShowMap(!showMap)}
               >
-                <Map size={14} />
+                <MapIcon size={14} />
                 <span>{showMap ? 'Ẩn bản đồ' : 'Hiện bản đồ Leaflet'}</span>
               </button>
             </div>

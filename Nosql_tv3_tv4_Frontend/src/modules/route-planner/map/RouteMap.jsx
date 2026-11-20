@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Map,
+  Map as MapIcon,
   MapPin,
   Bus,
   Play,
@@ -21,6 +21,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { findNearestStopsFromCoords, formatDistance } from '../utils/routeHelpers.js';
 import './map.css';
 
@@ -229,7 +230,7 @@ export function RouteMap({
   }, [allStops]);
 
   const stopLookupMap = useMemo(() => {
-    const map = new Map();
+    const map = new globalThis.Map();
     validAllStops.forEach((s) => {
       map.set(s.id, s);
       if (s._key) map.set(s._key, s);
@@ -372,7 +373,7 @@ export function RouteMap({
       >
         <div className="map-title-group">
           <h4>
-            <Map size={20} color="#2563eb" />
+            <MapIcon size={20} color="#2563eb" />
             <span>
               {hasActivePath
                 ? 'Bản đồ Lộ trình & Theo dõi Xe buýt Thời gian thực (Live GPS)'
