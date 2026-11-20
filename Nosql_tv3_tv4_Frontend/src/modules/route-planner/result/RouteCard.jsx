@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Bus, Clock, Milestone, ArrowRight, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bus, Clock, Milestone, ArrowRight, ChevronDown, ChevronUp, Eye, Heart } from 'lucide-react';
 import { StopList } from './StopList.jsx';
 import { formatDistance, formatDuration, formatCurrency } from '../utils/routeHelpers.js';
+import { authService } from '../../../services/authService';
+import { passengerService } from '../../../services/passengerService';
 
 export function RouteCard({
   path,
@@ -9,6 +11,57 @@ export function RouteCard({
   onSelect,
 }) {
   const [showDetails, setShowDetails] = useState(isSelected);
+  const [favoriteRouteCodes, setFavoriteRouteCodes] = useState(new Set());
+  const [favLoading, setFavLoading] = useState(false);
+
+  const isAuth = authService.isAuthenticated();
+
+  useEffect(() => {
+    if (isAuth) {
+      passengerService
+        .getFavoriteRoutes()
+        .then((favs) => {
+          if (Array.isArray(favs)) {
+            setFavoriteRouteCodes(new Set(favs.map((f) => f.routeCode || f.ma_tuyen)));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuth]);
+
+  const toggleFavorite = async (e, routeCode, detail) => {
+    e.stopPropagation();
+    if (!isAuth) {
+      alert('Vui lòng đăng nhập với tài khoản Hành khách để lưu tuyến xe yêu thích.');
+      return;
+    }
+
+    const isFav = favoriteRouteCodes.has(routeCode);
+    const targetRouteId = detail?.id || detail?._id || `TX_${routeCode}`;
+
+    try {
+      setFavLoading(true);
+      if (isFav) {
+        await passengerService.removeFavoriteRoute(targetRouteId);
+        setFavoriteRouteCodes((prev) => {
+          const next = new Set(prev);
+          next.delete(routeCode);
+          return next;
+        });
+      } else {
+        await passengerService.addFavoriteRoute({
+          routeId: targetRouteId,
+          routeCode,
+          routeName: detail?.tenTuyen || detail?.ten_tuyen || `Tuyến xe số ${routeCode}`,
+        });
+        setFavoriteRouteCodes((prev) => new Set(prev).add(routeCode));
+      }
+    } catch (err) {
+      console.warn('Lỗi khi cập nhật tuyến yêu thích:', err.message);
+    } finally {
+      setFavLoading(false);
+    }
+  };
 
   const hasUnknownFare =
     !path.routeDetails ||
@@ -27,6 +80,7 @@ export function RouteCard({
             const detail = path.routeDetails?.find((d) => d.maTuyen === routeCode);
             const color = detail?.mauSac || '#2563eb';
             const isUnknown = !routeCode || routeCode === 'CHUA_XAC_DINH';
+            const isFavorite = favoriteRouteCodes.has(routeCode);
 
             return (
               <React.Fragment key={routeCode || idx}>
@@ -37,6 +91,26 @@ export function RouteCard({
                 >
                   <Bus size={13} />
                   <span>{isUnknown ? 'Chưa rõ tuyến' : `Tuyến ${routeCode}`}</span>
+                  {!isUnknown && (
+                    <button
+                      type="button"
+                      onClick={(e) => toggleFavorite(e, routeCode, detail)}
+                      disabled={favLoading}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '0 2px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        marginLeft: '4px',
+                        color: isFavorite ? '#ef4444' : '#ffffffcc',
+                      }}
+                      title={isFavorite ? 'Bỏ lưu tuyến yêu thích' : 'Lưu tuyến này vào danh sách yêu thích'}
+                    >
+                      <Heart size={13} fill={isFavorite ? '#ef4444' : 'none'} />
+                    </button>
+                  )}
                 </span>
               </React.Fragment>
             );

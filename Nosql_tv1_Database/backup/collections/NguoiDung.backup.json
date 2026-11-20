@@ -23,15 +23,16 @@
     "email": "operator@busroute.vn",
     "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
     "so_dien_thoai": "0909888777",
-    "vai_tro": "admin",
+    "vai_tro": "operator",
     "trang_thai": "active",
     "ngay_tao": "2026-11-20T01:05:00.000Z",
     "id": "USR_02",
     "username": "operator",
     "fullName": "Nguyễn Văn Điều Hành",
-    "role": "admin",
+    "role": "operator",
     "status": "active",
-    "createdAt": "2026-11-20"
+    "createdAt": "2026-11-20",
+    "updated_at": "2026-11-20T14:59:21.004Z"
   },
   {
     "_id": "NguoiDung/USR_03",
@@ -40,14 +41,15 @@
     "email": "user@busroute.vn",
     "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
     "so_dien_thoai": "0912345678",
-    "vai_tro": "user",
+    "vai_tro": "passenger",
     "trang_thai": "active",
     "ngay_tao": "2026-11-20T01:10:00.000Z",
     "id": "USR_03",
     "username": "user",
     "fullName": "Trần Thị Hành Khách",
-    "role": "staff",
+    "role": "passenger",
     "status": "active",
-    "createdAt": "2026-11-20"
+    "createdAt": "2026-11-20",
+    "updated_at": "2026-11-20T14:59:21.013Z"
   }
 ]

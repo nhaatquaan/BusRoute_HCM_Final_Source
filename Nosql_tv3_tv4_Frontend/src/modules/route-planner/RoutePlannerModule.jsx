@@ -21,6 +21,8 @@ export function RoutePlannerModule() {
     setFromStop,
     toStop,
     setToStop,
+    criteria,
+    setCriteria,
     swapStops,
     searchRoute,
     paths,
@@ -195,6 +197,8 @@ export function RoutePlannerModule() {
             setFromStop={setFromStop}
             toStop={toStop}
             setToStop={setToStop}
+            criteria={criteria}
+            setCriteria={setCriteria}
             onSwap={swapStops}
             onSearch={searchRoute}
             loading={loading}

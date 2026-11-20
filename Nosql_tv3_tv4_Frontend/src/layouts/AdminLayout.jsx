@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   Bus,
@@ -10,7 +10,6 @@ import {
   Navigation,
   Bot,
   Network,
-  Share2,
   HardDrive,
   FileSpreadsheet,
   ShieldCheck,
@@ -21,7 +20,8 @@ import {
   Compass,
   BarChart3,
   Terminal,
-  Server
+  Server,
+  User
 } from 'lucide-react';
 import { authService } from '../services/authService';
 
@@ -34,7 +34,7 @@ const NAV_GROUPS = [
     ],
   },
   {
-    title: 'QUẢN LÝ',
+    title: 'QUẢN LÝ THỰC THỂ',
     items: [
       { to: '/admin/routes', label: 'Quản lý tuyến xe', icon: Bus },
       { to: '/admin/stops', label: 'Quản lý trạm dừng', icon: MapPin },
@@ -60,6 +60,12 @@ const NAV_GROUPS = [
       { to: '/admin/backup-restore', label: 'Sao lưu và khôi phục', icon: HardDrive },
     ],
   },
+  {
+    title: 'TÀI KHOẢN',
+    items: [
+      { to: '/admin/profile', label: 'Hồ sơ & Đổi mật khẩu', icon: User },
+    ],
+  },
 ];
 
 const ROUTE_NAMES = {
@@ -77,6 +83,7 @@ const ROUTE_NAMES = {
   '/admin/integrity': 'Kiểm tra toàn vẹn',
   '/admin/import-export': 'Import / Export',
   '/admin/backup-restore': 'Sao lưu và khôi phục',
+  '/admin/profile': 'Hồ sơ cá nhân & Bảo mật',
 };
 
 export default function AdminLayout() {
@@ -126,7 +133,7 @@ export default function AdminLayout() {
                   BusRoute <span className="text-[#245A85]">HCM</span>
                 </div>
                 <div className="text-[11px] font-medium text-slate-500">
-                  NoSQL MongoDB System
+                  Cổng Quản trị Hệ thống
                 </div>
               </div>
             )}
@@ -193,7 +200,11 @@ export default function AdminLayout() {
 
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} p-1`}>
             {!collapsed && (
-              <div className="flex items-center gap-2.5 min-w-0">
+              <Link
+                to="/admin/profile"
+                className="flex items-center gap-2.5 min-w-0 hover:opacity-80 transition-opacity"
+                title="Xem hồ sơ cá nhân"
+              >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#245A85] text-xs font-bold text-white uppercase">
                   {currentUser.fullName ? currentUser.fullName[0] : 'A'}
                 </div>
@@ -201,11 +212,11 @@ export default function AdminLayout() {
                   <div className="truncate text-xs font-semibold text-[#172B4D]">
                     {currentUser.fullName}
                   </div>
-                  <div className="truncate text-[11px] text-slate-500">
-                    {currentUser.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'}
+                  <div className="truncate text-[11px] text-indigo-700 font-semibold">
+                    Quản trị viên
                   </div>
                 </div>
-              </div>
+              </Link>
             )}
             <button
               type="button"
@@ -236,7 +247,7 @@ export default function AdminLayout() {
               <Menu size={20} />
             </button>
             <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="font-medium text-slate-400">Trang chủ</span>
+              <span className="font-medium text-slate-400">Quản trị</span>
               <span>/</span>
               <span className="font-semibold text-[#172B4D]">{currentTitle}</span>
             </div>
@@ -247,9 +258,13 @@ export default function AdminLayout() {
               <Server size={13} />
               <span>MongoDB 127.0.0.1:27017</span>
             </div>
-            <div className="text-xs text-slate-400 font-mono">
-              Port: 3000
-            </div>
+            <Link
+              to="/admin/profile"
+              className="flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <User size={13} className="text-[#245A85]" />
+              <span>Hồ sơ Admin</span>
+            </Link>
           </div>
         </header>
 

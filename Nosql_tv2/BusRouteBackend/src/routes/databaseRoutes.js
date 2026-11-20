@@ -15,6 +15,8 @@ const {
     getBackups,
     makeBackup,
     restoreBackup,
+    downloadFullBackup,
+    restoreUploadedBackup,
     exportData,
     importData
 } = require("../controllers/databaseController");
@@ -43,8 +45,10 @@ router.get("/integrity", protect, adminOnly, getIntegrityReport);
 
 // 6. Backup & Restore (Admin Only)
 router.get("/backup/list", protect, adminOnly, getBackups);
+router.get("/backup/download", protect, adminOnly, downloadFullBackup);
 router.post("/backup", protect, adminOnly, makeBackup);
 router.post("/restore", protect, adminOnly, restoreBackup);
+router.post("/restore/upload", protect, adminOnly, restoreUploadedBackup);
 
 // 7. Import / Export (Admin Only)
 router.get("/export/:name", protect, adminOnly, exportData);

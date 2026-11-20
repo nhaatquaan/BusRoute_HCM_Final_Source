@@ -13,6 +13,8 @@ const {
     listBackups,
     createFullBackup,
     restoreFromBackup,
+    getFullBackupData,
+    restoreFromUploadData,
     exportCollection,
     importCollection
 } = require("../services/databaseService");
@@ -248,6 +250,36 @@ const importData = async (req, res) => {
     }
 };
 
+// 16. Browser Download toàn bộ Database dưới dạng file JSON (phục vụ Cloud / Vercel demo)
+const downloadFullBackup = async (req, res) => {
+    try {
+        const data = await getFullBackupData();
+        const filename = `BusRouteDB_CloudBackup_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.json`;
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        return res.status(200).send(JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error("Download full backup error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 17. Browser Upload khôi phục Database từ file JSON (phục vụ Cloud / Vercel demo)
+const restoreUploadedBackup = async (req, res) => {
+    try {
+        const backupData = req.body;
+        const result = await restoreFromUploadData(backupData);
+        return res.status(200).json({
+            success: true,
+            message: "Khôi phục dữ liệu từ file JSON tải lên thành công",
+            data: result
+        });
+    } catch (error) {
+        console.error("Restore uploaded backup error:", error);
+        return res.status(400).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     getOverview,
     getCollectionDocuments,
@@ -262,6 +294,8 @@ module.exports = {
     getBackups,
     makeBackup,
     restoreBackup,
+    downloadFullBackup,
+    restoreUploadedBackup,
     exportData,
     importData
 };

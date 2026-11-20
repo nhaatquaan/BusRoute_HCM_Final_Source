@@ -28,8 +28,11 @@ export const userService = {
         id: `USR_${Date.now().toString().slice(-4)}`,
         username: payload.username.trim(),
         fullName: payload.fullName.trim(),
+        ho_ten: payload.fullName.trim(),
         email: payload.email.trim(),
-        role: payload.role || 'staff',
+        so_dien_thoai: payload.so_dien_thoai || '',
+        role: payload.role || 'passenger',
+        vai_tro: payload.role || 'passenger',
         status: payload.status || 'active',
         createdAt: new Date().toISOString().slice(0, 10),
       };

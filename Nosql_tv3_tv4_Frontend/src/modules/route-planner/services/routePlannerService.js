@@ -72,6 +72,8 @@ class RoutePlannerClientService {
         });
         if (options.maxDepth) params.append('maxDepth', options.maxDepth);
         if (options.limit) params.append('limit', options.limit);
+        if (options.criteria) params.append('criteria', options.criteria);
+        if (options.preference) params.append('preference', options.preference);
 
         const url = `${API_BASE}/api/path?${params.toString()}`;
         res = await fetch(url, { headers: { Accept: 'application/json' } });

@@ -9,15 +9,15 @@ const {
     removeStop
 } = require("../controllers/stopController");
 
-const { protect, adminOnly } = require("../middleware/authMiddleware");
+const { protect, operatorOrAdmin } = require("../middleware/authMiddleware");
 
-// Tra cứu công khai (dành cho người dùng và bản đồ)
+// Tra cứu công khai (Guest, Passenger, Operator, Admin đều truy cập được)
 router.get("/", getStops);
 router.get("/:id", getStop);
 
-// Quản trị trạm dừng (Yêu cầu quyền Quản trị viên - Admin Only)
-router.post("/", protect, adminOnly, addStop);
-router.put("/:id", protect, adminOnly, editStop);
-router.delete("/:id", protect, adminOnly, removeStop);
+// Quản lý nghiệp vụ trạm dừng (Cho phép Admin và Operator)
+router.post("/", protect, operatorOrAdmin, addStop);
+router.put("/:id", protect, operatorOrAdmin, editStop);
+router.delete("/:id", protect, operatorOrAdmin, removeStop);
 
 module.exports = router;

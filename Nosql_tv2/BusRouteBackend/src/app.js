@@ -7,11 +7,19 @@ const stopRoutes = require("./routes/stopRoutes");
 const databaseRoutes = require("./routes/databaseRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const aiRoutes = require("./routes/aiRoutes");
+const passengerRoutes = require("./routes/passengerRoutes");
 const { routePlannerRouter } = require("./modules/route-planner/routePlanner.routes");
 
 const app = express();
 
-app.use(cors());
+// Cấu hình CORS linh hoạt: hỗ trợ biến môi trường FRONTEND_URL và CORS_ORIGINS cho production
+const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
+    : process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL]
+    : "*";
+
+app.use(cors(allowedOrigins === "*" ? {} : { origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
@@ -19,7 +27,10 @@ app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use("/api/users", userRoutes);
 app.use("/api/auth", userRoutes);
 
-// 2. API tuyến xe
+// 2. API Cổng Hành khách & Cá nhân hóa (Lịch sử tìm kiếm, Địa điểm đã lưu, Tuyến yêu thích, Đề xuất)
+app.use("/api/passenger", passengerRoutes);
+
+// 3. API tuyến xe
 app.use("/api/routes", routeRoutes);
 
 // 3. API trạm dừng

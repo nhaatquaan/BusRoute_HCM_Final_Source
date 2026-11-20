@@ -1,70 +1,10 @@
 const { db } = require("../config/database");
 const { defaultService: routePlannerService } = require("../modules/route-planner/routePlanner.service");
-
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3.5:4b";
-const OLLAMA_TIMEOUT_MS = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) || 180000;
-
-// Hàm gọi Ollama API cục bộ
-const callOllama = async (prompt, systemPrompt = "", temperature = 0.3) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS); // Cho phép chờ tối đa 180s
-
-    try {
-        const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: OLLAMA_MODEL,
-                prompt: prompt,
-                system: systemPrompt,
-                stream: false,
-                keep_alive: "10m", // Duy trì nạp model trong RAM trong 10 phút
-                think: false, // Tắt thinking reasoning để tăng tốc độ phản hồi gấp 3 lần và trả lời trực tiếp
-                options: {
-                    temperature,
-                    num_predict: 384 // Giới hạn token đầu ra hợp lý để tránh tạo sinh kéo dài
-                }
-            }),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeout);
-
-        if (!response.ok) {
-            throw new Error(`Ollama trả về mã lỗi HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.response;
-    } catch (err) {
-        clearTimeout(timeout);
-        throw err;
-    }
-};
-
-// Kiểm tra trạng thái Ollama
-const checkOllamaHealth = async () => {
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (res.ok) {
-            const data = await res.json();
-            const hasModel = (data.models || []).some((m) => m.name.includes(OLLAMA_MODEL.split(":")[0]));
-            return {
-                online: true,
-                modelFound: hasModel,
-                models: (data.models || []).map((m) => m.name),
-                activeModel: OLLAMA_MODEL
-            };
-        }
-        return { online: false, modelFound: false };
-    } catch (_) {
-        return { online: false, modelFound: false };
-    }
-};
+const {
+    getProviderStatus,
+    generateAIResponse,
+    CURRENT_PROVIDER
+} = require("../services/aiProviderService");
 
 // Chuẩn hóa chuỗi tìm kiếm tiếng Việt không dấu
 const removeVietnameseTones = (str) => {
@@ -132,19 +72,8 @@ const chatWithAssistant = async (req, res) => {
         });
     }
 
-    // 1. Kiểm tra trạng thái Ollama
-    const ollamaStatus = await checkOllamaHealth();
-
-    if (!ollamaStatus.online) {
-        return res.status(200).json({
-            success: true,
-            available: false,
-            reply:
-                "Hiện tại dịch vụ Trợ lý AI cục bộ (Ollama) chưa được khởi động tại máy chủ (cổng 11434). " +
-                "Bạn vẫn có thể sử dụng đầy đủ các tính năng Tra cứu lộ trình, Bản đồ mạng lưới và Graph Explorer bằng dữ liệu MongoDB thật!",
-            suggestion: "Vui lòng chạy lệnh: ollama run " + OLLAMA_MODEL
-        });
-    }
+    // 1. Kiểm tra trạng thái AI Provider (Ollama / Gemini / Fallback)
+    const providerStatus = await getProviderStatus();
 
     try {
         // 2. Trích xuất Intent và Thực thể (Heuristic Pattern siêu tốc + Fallback AI)
@@ -188,18 +117,22 @@ Nhiệm vụ của bạn là nhận câu nói của người dùng và trả v�
   "stop": "tên trạm cần xem tuyến đi qua hoặc null",
   "preference": "ít chuyển tuyến" | "nhanh nhất" | null
 }`;
-            try {
-                const rawExtraction = await callOllama(
-                    `Phân tích câu sau: "${message}"`,
-                    extractionSystemPrompt,
-                    0.1
-                );
-                const jsonText = rawExtraction.substring(
-                    rawExtraction.indexOf("{"),
-                    rawExtraction.lastIndexOf("}") + 1
-                );
-                extractedJson = JSON.parse(jsonText);
-            } catch (_) {
+            if (providerStatus.online) {
+                try {
+                    const rawExtraction = await generateAIResponse(
+                        `Phân tích câu sau: "${message}"`,
+                        extractionSystemPrompt,
+                        0.1
+                    );
+                    const jsonText = rawExtraction.substring(
+                        rawExtraction.indexOf("{"),
+                        rawExtraction.lastIndexOf("}") + 1
+                    );
+                    extractedJson = JSON.parse(jsonText);
+                } catch (_) {
+                    extractedJson = { intent: "general_qa" };
+                }
+            } else {
                 extractedJson = { intent: "general_qa" };
             }
         }
@@ -281,16 +214,22 @@ Câu hỏi của người dùng: "${message}"
 Hãy trả lời và hướng dẫn người dùng một cách chu đáo, dễ hiểu nhất.`;
 
         let aiResponse;
-        try {
-            aiResponse = await callOllama(finalPrompt, explainSystemPrompt, 0.4);
-        } catch (ollamaErr) {
-            console.warn("Ollama synthesis warning (sử dụng fallback trực tiếp từ MongoDB):", ollamaErr.message);
-            aiResponse = `Dựa trên cơ sở dữ liệu MongoDB thực tế:\n\n${contextForAI}\n\n*(Lưu ý: Mô hình AI cục bộ đang bận hoặc phản hồi chậm; hệ thống đã tự động trích xuất kết quả chính xác trực tiếp từ MongoDB để đảm bảo thông tin thông suốt).*`;
+        if (providerStatus.online) {
+            try {
+                aiResponse = await generateAIResponse(finalPrompt, explainSystemPrompt, 0.4);
+            } catch (aiErr) {
+                console.warn("AI synthesis warning (sử dụng fallback trực tiếp từ MongoDB):", aiErr.message);
+                aiResponse = `Dựa trên cơ sở dữ liệu MongoDB thực tế:\n\n${contextForAI}\n\n*(Thông báo: Mô hình AI phản hồi chậm hoặc đang bận; hệ thống đã tự động trích xuất kết quả chính xác trực tiếp từ MongoDB để đảm bảo thông tin thông suốt).*`;
+            }
+        } else {
+            aiResponse = `Dựa trên cơ sở dữ liệu MongoDB thực tế:\n\n${contextForAI}\n\n*(Chế độ tra cứu dữ liệu thực tế MongoDB - Không phụ thuộc Cloud AI).*`;
         }
 
         return res.status(200).json({
             success: true,
-            available: true,
+            available: providerStatus.online,
+            provider: providerStatus.provider,
+            mode: providerStatus.mode,
             reply: aiResponse,
             extracted: extractedJson,
             data: resultData
@@ -300,7 +239,7 @@ Hãy trả lời và hướng dẫn người dùng một cách chu đáo, dễ h
         return res.status(200).json({
             success: true,
             available: false,
-            reply: "Hệ thống tra cứu đang hoạt động dựa trên MongoDB. Không thể kết nối với mô hình AI cục bộ lúc này, bạn có thể sử dụng tính năng Tra cứu lộ trình trực tiếp.",
+            reply: "Hệ thống tra cứu đang hoạt động dựa trên MongoDB. Bạn có thể sử dụng tính năng Tra cứu lộ trình trực tiếp.",
             message: error.message
         });
     }
@@ -308,7 +247,7 @@ Hãy trả lời và hướng dẫn người dùng một cách chu đáo, dễ h
 
 // Lấy thông tin trạng thái dịch vụ AI
 const getAIStatus = async (req, res) => {
-    const status = await checkOllamaHealth();
+    const status = await getProviderStatus();
     return res.status(200).json({
         success: true,
         ...status

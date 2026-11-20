@@ -58,3 +58,23 @@ test("Route Planner: Ưu tiên xếp hạng phương án theo số lần chuyể
     assert.strictEqual(candidates[1].transfers, 1, "Phương án 1 chuyển tuyến xếp thứ nhì");
     assert.strictEqual(candidates[2].transfers, 2, "Phương án 2 chuyển tuyến xếp cuối");
 });
+
+test("Route Planner: Tiêu chí 'fewest_stops' xếp hạng đúng theo số trạm dừng ít nhất", () => {
+    const candidates = [
+        { pathIndex: 1, transfers: 0, totalStops: 14, totalDuration: 30, totalDistance: 12000 },
+        { pathIndex: 2, transfers: 1, totalStops: 6, totalDuration: 22, totalDistance: 5000 },
+        { pathIndex: 3, transfers: 1, totalStops: 9, totalDuration: 25, totalDistance: 8000 }
+    ];
+
+    candidates.sort((a, b) => {
+        if (a.totalStops !== b.totalStops) return a.totalStops - b.totalStops;
+        if (a.totalDistance !== b.totalDistance) return a.totalDistance - b.totalDistance;
+        if (a.transfers !== null && b.transfers !== null && a.transfers !== b.transfers)
+            return a.transfers - b.transfers;
+        return a.totalDuration - b.totalDuration;
+    });
+
+    assert.strictEqual(candidates[0].totalStops, 6, "Phương án 6 trạm phải xếp đầu tiên theo tiêu chí fewest_stops");
+    assert.strictEqual(candidates[1].totalStops, 9, "Phương án 9 trạm xếp thứ nhì");
+    assert.strictEqual(candidates[2].totalStops, 14, "Phương án 14 trạm xếp cuối");
+});

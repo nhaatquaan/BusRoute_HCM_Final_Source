@@ -689,6 +689,54 @@ const restoreFromBackup = async (filename) => {
     };
 };
 
+const getFullBackupData = async () => {
+    const backupData = {
+        metadata: {
+            database: "BusRouteDB",
+            exportedAt: new Date().toISOString(),
+            version: "2.0.0"
+        },
+        collections: {}
+    };
+
+    for (const colName of COLLECTIONS) {
+        const docs = await db.collection(colName).find({}).toArray();
+        backupData.collections[colName] = docs;
+    }
+
+    return backupData;
+};
+
+const restoreFromUploadData = async (backupData) => {
+    if (!backupData || typeof backupData !== "object" || !backupData.collections) {
+        throw new Error("File JSON sao lưu không hợp lệ: thiếu thuộc tính 'collections'.");
+    }
+
+    const { collections } = backupData;
+    const requiredCollections = ["TuyenXe", "TramDung", "NguoiDung", "CO_TRAM", "KE_TIEP"];
+    for (const reqCol of requiredCollections) {
+        if (!collections[reqCol] || !Array.isArray(collections[reqCol])) {
+            throw new Error(`Dữ liệu không hợp lệ: thiếu collection bắt buộc "${reqCol}".`);
+        }
+    }
+
+    const restoredCounts = {};
+    for (const [colName, docs] of Object.entries(collections)) {
+        if (!COLLECTIONS.includes(colName)) continue;
+        const col = db.collection(colName);
+        await col.deleteMany({});
+        if (Array.isArray(docs) && docs.length > 0) {
+            await col.insertMany(docs);
+        }
+        restoredCounts[colName] = docs.length;
+    }
+
+    return {
+        restoredCounts,
+        restoredAt: new Date().toISOString()
+    };
+};
+
 /**
  * 8. IMPORT & EXPORT
  */
@@ -764,6 +812,8 @@ module.exports = {
     listBackups,
     createFullBackup,
     restoreFromBackup,
+    getFullBackupData,
+    restoreFromUploadData,
     exportCollection,
     importCollection
 };

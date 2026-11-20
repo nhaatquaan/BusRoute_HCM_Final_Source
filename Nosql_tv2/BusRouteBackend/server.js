@@ -2,11 +2,22 @@ require("dotenv").config();
 
 const app = require("./src/app");
 const { connectDB } = require("./src/config/database");
+const { getJwtSecret } = require("./src/config/jwt");
 
 const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
-    // Kiểm tra kết nối MongoDB
+    // 1. Kiểm tra an toàn bảo mật JWT_SECRET trong môi trường Production
+    if (process.env.NODE_ENV === "production") {
+        try {
+            getJwtSecret();
+        } catch (jwtErr) {
+            console.error("\n❌ " + jwtErr.message + "\n");
+            process.exit(1);
+        }
+    }
+
+    // 2. Kiểm tra kết nối MongoDB
     const connected = await connectDB();
 
     if (!connected) {

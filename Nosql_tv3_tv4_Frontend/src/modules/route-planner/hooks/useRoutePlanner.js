@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import routePlannerService from '../services/routePlannerService.js';
+import { authService } from '../../../services/authService';
+import { passengerService } from '../../../services/passengerService';
 
 export function useRoutePlanner() {
   const [stopsList, setStopsList] = useState([]);
@@ -9,6 +11,7 @@ export function useRoutePlanner() {
   // Path finder state
   const [fromStop, setFromStop] = useState('');
   const [toStop, setToStop] = useState('');
+  const [criteria, setCriteria] = useState('least_transfers'); // 'least_transfers' | 'fastest' | 'least_walking'
   const [paths, setPaths] = useState([]);
   const [selectedPathIndex, setSelectedPathIndex] = useState(0);
   const [routeInfo, setRouteInfo] = useState(null);
@@ -77,13 +80,35 @@ export function useRoutePlanner() {
     setSelectedPathIndex(0);
 
     try {
-      const data = await routePlannerService.planRoute(fromStop, toStop);
+      const data = await routePlannerService.planRoute(fromStop, toStop, { criteria });
       setRouteInfo(data);
       setPaths(data.paths || []);
       setIsMock(Boolean(data.isMock));
 
       if (!data.paths || data.paths.length === 0) {
         setError(data.message || 'Không tìm thấy lộ trình phù hợp giữa hai trạm này.');
+      } else {
+        // Ghi nhận lịch sử tìm kiếm: Nếu đã đăng nhập thì lưu lên MongoDB, nếu là Guest thì lưu LocalStorage (tối đa 5 lượt)
+        const primaryPath = data.paths[0];
+        const searchPayload = {
+          fromStopId: fromStop,
+          toStopId: toStop,
+          fromStopName: data.from?.name || fromStop,
+          toStopName: data.to?.name || toStop,
+          criteria,
+          summaryResult: {
+            pathsCount: data.paths.length,
+            transfers: primaryPath?.transfers,
+            durationMinutes: primaryPath?.totalDuration,
+            primaryRoute: primaryPath?.routes?.[0] || null,
+          },
+        };
+
+        if (authService.isAuthenticated()) {
+          passengerService.recordSearch(searchPayload);
+        } else {
+          passengerService.saveGuestLocalSearch(searchPayload);
+        }
       }
     } catch (err) {
       setError(err.message || 'Đã có lỗi xảy ra khi tra cứu lộ trình.');
@@ -91,7 +116,7 @@ export function useRoutePlanner() {
     } finally {
       setLoading(false);
     }
-  }, [fromStop, toStop]);
+  }, [fromStop, toStop, criteria]);
 
   // Execute Search By Stop
   const searchRoutesByStop = useCallback(async (stopId) => {
@@ -142,6 +167,8 @@ export function useRoutePlanner() {
     setFromStop,
     toStop,
     setToStop,
+    criteria,
+    setCriteria,
     swapStops,
     searchRoute,
     resetSearch,

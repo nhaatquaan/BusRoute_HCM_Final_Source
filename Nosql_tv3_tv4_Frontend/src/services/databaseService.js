@@ -78,6 +78,16 @@ export const databaseService = {
     return data;
   },
 
+  async downloadFullBackup() {
+    const { data } = await apiClient.get('/api/database/backup/download');
+    return data;
+  },
+
+  async restoreUploadedBackup(payload) {
+    const { data } = await apiClient.post('/api/database/restore/upload', payload);
+    return data;
+  },
+
   // 8. Import / Export
   async importData(collectionName, items, mode = 'insert') {
     const { data } = await apiClient.post(`/api/database/import/${collectionName}`, {

@@ -7,7 +7,8 @@ class RoutePlannerController {
 
     findPath = async (req, res) => {
         try {
-            const { from, to, maxDepth, limit } = req.query;
+            const { from, to, maxDepth, limit, criteria, preference } = req.query;
+            const selectedCriteria = criteria || preference || "least_transfers";
 
             if (!from || typeof from !== "string" || !from.trim()) {
                 return res.status(400).json({
@@ -76,17 +77,21 @@ class RoutePlannerController {
 
             const result = await this.service.planRoute(from, to, {
                 maxDepth: parsedMaxDepth,
-                limit: parsedLimit
+                limit: parsedLimit,
+                criteria: selectedCriteria
             });
 
             return res.status(200).json({
                 success: true,
                 source: result.source || "mongodb",
                 traversalMode: result.traversalMode || "graph_lookup",
+                criteria: result.criteria || selectedCriteria,
+                criteriaLabel: result.criteriaLabel,
                 data: {
                     from: result.from,
                     to: result.to,
-                    paths: result.paths
+                    paths: result.paths,
+                    criteria: result.criteria || selectedCriteria
                 },
                 message: result.message || "Tìm lộ trình thành công."
             });

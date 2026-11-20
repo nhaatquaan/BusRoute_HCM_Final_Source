@@ -1,11 +1,12 @@
 const { MongoClient, ObjectId } = require("mongodb");
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017";
-const MONGO_DATABASE = process.env.MONGO_DATABASE || "BusRouteDB";
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb://127.0.0.1:27017";
+const MONGO_DATABASE = process.env.DB_NAME || process.env.MONGO_DATABASE || "BusRouteDB";
 
 const client = new MongoClient(MONGO_URI, {
-    serverSelectionTimeoutMS: 3000,
-    connectTimeoutMS: 3000
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
+    maxPoolSize: 10
 });
 
 const db = client.db(MONGO_DATABASE);
@@ -45,6 +46,9 @@ const buildIdFilter = (collectionName, idOrKey) => {
 };
 
 const connectDB = async () => {
+    if (isDbConnected) {
+        return true;
+    }
     try {
         await client.connect();
         const admin = db.admin();
@@ -58,7 +62,7 @@ const connectDB = async () => {
         return true;
     } catch (error) {
         console.warn("MongoDB connection warning:", error.message);
-        console.warn("Máy chủ chưa khởi động dịch vụ MongoDB tại 127.0.0.1:27017.");
+        console.warn("Chưa thể kết nối tới cơ sở dữ liệu MongoDB:", MONGO_URI);
         isDbConnected = false;
         return false;
     }

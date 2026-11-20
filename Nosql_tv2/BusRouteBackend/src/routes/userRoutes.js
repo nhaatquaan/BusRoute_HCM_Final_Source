@@ -2,67 +2,44 @@ const express = require("express");
 const router = express.Router();
 
 const {
-    getUsers,
+    login,
     register,
+    getMe,
+    updateMe,
+    changePassword,
+    getUsers,
+    createUserByAdmin,
     editUser,
-    removeUser,
-    login
+    removeUser
 } = require("../controllers/userController");
 
 const { protect, adminOnly, rateLimit } = require("../middleware/authMiddleware");
 
-// Middleware tùy chọn gắn req.user nếu có token hợp lệ mà không bắt buộc
-const optionalAuth = async (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-            const token = authHeader.split(" ")[1];
-            const jwt = require("jsonwebtoken");
-            const { findUserById } = require("../services/userService");
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_jwt_secret_busroute_2026");
-            const user = await findUserById(decoded.id || decoded._key);
-            if (user) {
-                req.user = {
-                    id: user._key || user.id,
-                    _key: user._key,
-                    _id: user._id,
-                    email: user.email,
-                    vai_tro: user.vai_tro,
-                    role: user.role
-                };
-            }
-        }
-    } catch (_) {}
-    next();
-};
+// ============================================================================
+// 1. PUBLIC ENDPOINTS
+// ============================================================================
 
-// API lấy danh sách người dùng (Chỉ Quản trị viên)
-router.get("/", protect, adminOnly, getUsers);
-
-// API đăng ký / tạo tài khoản
-// Người dùng tự đăng ký chỉ nhận role "user"
-// Admin có thể gửi token để tạo tài khoản "admin" hoặc "staff"
-router.post("/", optionalAuth, register);
-router.post("/register", rateLimit(10, 60000), optionalAuth, register);
-
-// API cập nhật (Chỉ người dùng đang đăng nhập hoặc Quản trị viên)
-router.put("/:id", protect, editUser);
-
-// API xóa người dùng (Chỉ Quản trị viên)
-router.delete("/:id", protect, adminOnly, removeUser);
-
-// API đăng nhập (Rate limit chống brute force)
+// Đăng nhập (Chống Brute Force: 15 req / phút)
 router.post("/login", rateLimit(15, 60000), login);
 
-// API lấy thông tin người dùng hiện tại
-router.get("/me", protect, (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Xác thực thành công",
-        data: {
-            user: req.user
-        }
-    });
-});
+// Đăng ký tài khoản công khai (Bắt buộc role: 'passenger', 10 req / phút)
+router.post("/register", rateLimit(10, 60000), register);
+
+// ============================================================================
+// 2. USER SELF PROFILE (Chính chủ quản lý thông tin & đổi mật khẩu - Chống IDOR)
+// ============================================================================
+router.get("/me", protect, getMe);
+router.put("/me", protect, updateMe);
+router.patch("/me", protect, updateMe);
+router.put("/me/password", protect, changePassword);
+router.patch("/me/password", protect, changePassword);
+
+// ============================================================================
+// 3. ADMIN MANAGEMENT (Chỉ dành riêng cho Quản trị viên - Admin Only)
+// ============================================================================
+router.get("/", protect, adminOnly, getUsers);
+router.post("/", protect, adminOnly, createUserByAdmin);
+router.put("/:id", protect, adminOnly, editUser);
+router.delete("/:id", protect, adminOnly, removeUser);
 
 module.exports = router;

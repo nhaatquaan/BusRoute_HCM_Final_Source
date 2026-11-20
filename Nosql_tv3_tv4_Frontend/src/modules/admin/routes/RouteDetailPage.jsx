@@ -12,7 +12,9 @@ import {
   RotateCcw,
   MapPin,
   Map as MapIcon,
-  Download
+  Navigation,
+  Clock,
+  Milestone
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -36,6 +38,7 @@ export default function RouteDetailPage() {
   const { id } = useParams();
   const [route, setRoute] = useState(null);
   const [allStops, setAllStops] = useState([]);
+  const [direction, setDirection] = useState('luot_di'); // 'luot_di' | 'luot_ve'
   const [orderedStops, setOrderedStops] = useState([]);
   const [initialOrder, setInitialOrder] = useState([]);
   const [searchStop, setSearchStop] = useState('');
@@ -44,16 +47,20 @@ export default function RouteDetailPage() {
   const [savedNotice, setSavedNotice] = useState(false);
   const [error, setError] = useState('');
 
-  const loadData = async () => {
+  const loadData = async (targetDirection = direction) => {
     try {
       setError('');
       const [routeData, stopsData] = await Promise.all([
-        routeService.getById(id),
+        routeService.getById(id, targetDirection),
         stopService.getAll(),
       ]);
       setRoute(routeData);
       setAllStops(stopsData);
-      const stopsList = routeData.stops || [];
+      const stopsList = (routeData.stops || []).map((s, idx) => ({
+        ...s,
+        khoang_cach_km: s.khoang_cach_km ?? s.distance ?? (idx === 0 ? 0 : 1.5),
+        thoi_gian_di_chuyen_phut: s.thoi_gian_di_chuyen_phut ?? s.duration ?? (idx === 0 ? 0 : 5),
+      }));
       setOrderedStops(stopsList);
       setInitialOrder(stopsList);
       setDirty(false);
@@ -63,8 +70,17 @@ export default function RouteDetailPage() {
   };
 
   useEffect(() => {
-    loadData();
-  }, [id]);
+    loadData(direction);
+  }, [id, direction]);
+
+  const handleDirectionChange = (newDir) => {
+    if (dirty) {
+      if (!window.confirm('Bạn có thay đổi chưa lưu cho chiều này. Chuyển chiều sẽ làm mất thay đổi?')) {
+        return;
+      }
+    }
+    setDirection(newDir);
+  };
 
   const availableStops = useMemo(() => {
     const assignedIds = new Set(orderedStops.map((s) => s.id));
@@ -80,8 +96,8 @@ export default function RouteDetailPage() {
     });
   }, [allStops, orderedStops, searchStop]);
 
-  const moveStop = (index, direction) => {
-    const target = index + direction;
+  const moveStop = (index, delta) => {
+    const target = index + delta;
     if (target < 0 || target >= orderedStops.length) return;
     const next = [...orderedStops];
     const [item] = next.splice(index, 1);
@@ -92,7 +108,12 @@ export default function RouteDetailPage() {
   };
 
   const addStop = (stop) => {
-    setOrderedStops((prev) => [...prev, stop]);
+    const newStop = {
+      ...stop,
+      khoang_cach_km: orderedStops.length === 0 ? 0 : 1.5,
+      thoi_gian_di_chuyen_phut: orderedStops.length === 0 ? 0 : 5,
+    };
+    setOrderedStops((prev) => [...prev, newStop]);
     setDirty(true);
     setSavedNotice(false);
   };
@@ -103,21 +124,28 @@ export default function RouteDetailPage() {
     setSavedNotice(false);
   };
 
+  const updateStopMetric = (index, field, value) => {
+    setOrderedStops((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: Number(value) };
+      return next;
+    });
+    setDirty(true);
+    setSavedNotice(false);
+  };
+
   const handleResetOrder = () => {
     setOrderedStops([...initialOrder]);
     setDirty(false);
   };
 
   const handleSaveOrder = async () => {
-    if (!window.confirm('Bạn có chắc chắn muốn lưu thứ tự các trạm này vào cơ sở dữ liệu MongoDB?')) {
+    if (!window.confirm(`Bạn có chắc chắn muốn lưu lộ trình "${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}" vào MongoDB?`)) {
       return;
     }
     try {
       setSaving(true);
-      await routeService.updateStopsOrder(
-        id,
-        orderedStops.map((s) => s.id)
-      );
+      await routeService.updateStopsOrder(id, orderedStops, direction);
       setInitialOrder([...orderedStops]);
       setDirty(false);
       setSavedNotice(true);
@@ -201,15 +229,46 @@ export default function RouteDetailPage() {
         </div>
       </div>
 
+      {/* Direction Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-3">
+        <span className="text-xs font-semibold text-slate-500 mr-2 flex items-center gap-1">
+          <Navigation size={14} /> Chiều di chuyển:
+        </span>
+        <button
+          type="button"
+          onClick={() => handleDirectionChange('luot_di')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+            direction === 'luot_di'
+              ? 'bg-[#245A85] text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-[#E2E8F0] hover:bg-slate-50'
+          }`}
+        >
+          Lượt đi ({route.startPoint || 'Điểm đầu'} ➔ {route.endPoint || 'Điểm cuối'})
+        </button>
+        <button
+          type="button"
+          onClick={() => handleDirectionChange('luot_ve')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+            direction === 'luot_ve'
+              ? 'bg-[#245A85] text-white shadow-xs'
+              : 'bg-white text-slate-600 border border-[#E2E8F0] hover:bg-slate-50'
+          }`}
+        >
+          Lượt về ({route.endPoint || 'Điểm cuối'} ➔ {route.startPoint || 'Điểm đầu'})
+        </button>
+      </div>
+
       {/* Map of the Route Sequence */}
       <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-xs overflow-hidden">
         <div className="flex items-center justify-between border-b border-[#E2E8F0] px-5 py-3.5 bg-[#F8FAFC]">
           <div className="flex items-center gap-2">
             <MapIcon size={16} className="text-[#245A85]" />
-            <h3 className="text-sm font-bold text-[#172B4D]">Lộ trình Thực tế trên Bản đồ OpenStreetMap</h3>
+            <h3 className="text-sm font-bold text-[#172B4D]">
+              Lộ trình {direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'} trên Bản đồ OpenStreetMap
+            </h3>
           </div>
           <span className="text-xs text-slate-500">
-            {routePolylineCoords.length} trạm dừng &bull; Thứ tự kết nối mũi tên có hướng
+            {routePolylineCoords.length} trạm dừng &bull; Thứ tự kết nối đồ thị KE_TIEP
           </span>
         </div>
 
@@ -228,11 +287,16 @@ export default function RouteDetailPage() {
               if (isNaN(lat) || isNaN(lng) || lat === 0) return null;
 
               return (
-                <Marker key={stop.id || stop._id} position={[lat, lng]} icon={stopMarkerIcon}>
+                <Marker key={stop.id || stop._id || idx} position={[lat, lng]} icon={stopMarkerIcon}>
                   <Popup>
                     <div className="text-xs">
-                      <div className="font-bold text-[#172B4D]">#{idx + 1}. {stop.name}</div>
-                      <div className="text-slate-500">{stop.address}</div>
+                      <div className="font-bold text-[#172B4D]">#{idx + 1}. {stop.name || stop.ten_tram}</div>
+                      <div className="text-slate-500">{stop.address || stop.dia_chi}</div>
+                      {idx > 0 && (
+                        <div className="mt-1 text-[11px] text-blue-700">
+                          Khoảng cách: {stop.khoang_cach_km || 1.5} km &bull; {stop.thoi_gian_di_chuyen_phut || 5} phút
+                        </div>
+                      )}
                     </div>
                   </Popup>
                 </Marker>
@@ -248,20 +312,20 @@ export default function RouteDetailPage() {
         <div className="lg:col-span-7 rounded-xl border border-[#E2E8F0] bg-white shadow-xs overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#E2E8F0] px-5 py-3.5 bg-[#F8FAFC]">
             <h2 className="text-sm font-bold text-[#172B4D]">
-              Thứ tự trạm dừng trên tuyến ({orderedStops.length})
+              Thứ tự trạm dừng ({direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}) &bull; {orderedStops.length} trạm
             </h2>
             {dirty && (
               <Badge variant="warning">Có thay đổi chưa lưu</Badge>
             )}
           </div>
 
-          <div className="divide-y divide-[#E2E8F0] max-h-[500px] overflow-y-auto">
+          <div className="divide-y divide-[#E2E8F0] max-h-[520px] overflow-y-auto">
             {orderedStops.map((stop, index) => (
               <div
                 key={stop.id || stop._id || index}
-                className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors"
+                className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50/70 transition-colors"
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#245A85]/20 bg-[#245A85]/10 text-xs font-bold text-[#245A85] tabular-nums">
                     {index + 1}
                   </span>
@@ -273,6 +337,37 @@ export default function RouteDetailPage() {
                       <span className="font-mono text-slate-600">{stop.code || stop.ma_tram}</span> &bull;{' '}
                       {stop.address || stop.dia_chi}
                     </div>
+
+                    {/* Inline Distance and Duration Editor */}
+                    {index > 0 && (
+                      <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Milestone size={11} className="text-slate-400" />
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={stop.khoang_cach_km ?? 1.5}
+                            onChange={(e) => updateStopMetric(index, 'khoang_cach_km', e.target.value)}
+                            className="w-14 rounded border border-[#E2E8F0] px-1 py-0.5 text-[11px] text-[#172B4D] focus:border-[#245A85] focus:outline-none"
+                          />
+                          km
+                        </span>
+                        <span>&bull;</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock size={11} className="text-slate-400" />
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            value={stop.thoi_gian_di_chuyen_phut ?? 5}
+                            onChange={(e) => updateStopMetric(index, 'thoi_gian_di_chuyen_phut', e.target.value)}
+                            className="w-12 rounded border border-[#E2E8F0] px-1 py-0.5 text-[11px] text-[#172B4D] focus:border-[#245A85] focus:outline-none"
+                          />
+                          phút
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -309,7 +404,7 @@ export default function RouteDetailPage() {
 
             {orderedStops.length === 0 && (
               <div className="px-5 py-10 text-center text-xs text-slate-400">
-                Tuyến này chưa được gán trạm nào. Hãy chọn từ danh sách bên phải.
+                Tuyến này chưa được gán trạm nào cho {direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}. Hãy chọn từ danh sách bên phải.
               </div>
             )}
           </div>
@@ -331,7 +426,7 @@ export default function RouteDetailPage() {
             </div>
           </div>
 
-          <div className="flex-1 divide-y divide-[#E2E8F0] max-h-[460px] overflow-y-auto">
+          <div className="flex-1 divide-y divide-[#E2E8F0] max-h-[480px] overflow-y-auto">
             {availableStops.map((stop) => (
               <div
                 key={stop.id || stop._id}

@@ -54,11 +54,21 @@ const deleteUserById = async (userId) => {
     return true;
 };
 
+// 7. Đếm số lượng tài khoản Quản trị viên đang hoạt động
+const countActiveAdmins = async () => {
+    return await userCollection.countDocuments({
+        role: "admin",
+        status: { $ne: "locked" },
+        trang_thai: { $ne: "inactive" }
+    });
+};
+
 module.exports = {
     findUserByEmail,
     createUser,
     findUserById,
     getAllUsers,
     updateUserById,
-    deleteUserById
+    deleteUserById,
+    countActiveAdmins
 };

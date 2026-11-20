@@ -3,7 +3,7 @@
     "database": "BusRouteDB",
     "mongo_uri": "mongodb://localhost:27017",
     "graph_name": "BusRouteGraph",
-    "exported_at": "2026-11-20T06:26:11.219Z",
+    "exported_at": "2026-11-20T15:36:44.571Z",
     "collections_count": {
       "TuyenXe": 6,
       "TramDung": 25,
@@ -899,15 +899,16 @@
         "email": "operator@busroute.vn",
         "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
         "so_dien_thoai": "0909888777",
-        "vai_tro": "admin",
+        "vai_tro": "operator",
         "trang_thai": "active",
         "ngay_tao": "2026-11-20T01:05:00.000Z",
         "id": "USR_02",
         "username": "operator",
         "fullName": "Nguyễn Văn Điều Hành",
-        "role": "admin",
+        "role": "operator",
         "status": "active",
-        "createdAt": "2026-11-20"
+        "createdAt": "2026-11-20",
+        "updated_at": "2026-11-20T14:59:21.004Z"
       },
       {
         "_id": "NguoiDung/USR_03",
@@ -916,15 +917,16 @@
         "email": "user@busroute.vn",
         "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
         "so_dien_thoai": "0912345678",
-        "vai_tro": "user",
+        "vai_tro": "passenger",
         "trang_thai": "active",
         "ngay_tao": "2026-11-20T01:10:00.000Z",
         "id": "USR_03",
         "username": "user",
         "fullName": "Trần Thị Hành Khách",
-        "role": "staff",
+        "role": "passenger",
         "status": "active",
-        "createdAt": "2026-11-20"
+        "createdAt": "2026-11-20",
+        "updated_at": "2026-11-20T14:59:21.013Z"
       }
     ],
     "CO_TRAM": [
@@ -3348,7 +3350,7 @@
             "description": "Cạnh có hướng nối Trạm dừng hiện tại sang Trạm dừng kế tiếp kèm khoảng cách và thời gian"
           }
         ],
-        "created_at": "2026-11-20T06:26:11.067Z"
+        "created_at": "2026-11-20T12:32:37.868Z"
       }
     ]
   }

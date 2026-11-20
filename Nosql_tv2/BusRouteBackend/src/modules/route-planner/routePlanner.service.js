@@ -239,14 +239,37 @@ class RoutePlannerService {
             };
         });
 
+        const rawCriteria = options.criteria || "least_transfers";
+        // Chuẩn hóa tên tiêu chí: Nếu gọi 'least_walking' mà thực tế đếm số trạm thì chuẩn hóa thành 'fewest_stops'
+        const criteria = rawCriteria === "least_walking" ? "fewest_stops" : rawCriteria;
+
         formattedPaths.sort((a, b) => {
-            if (a.transfers !== null && b.transfers !== null) {
-                if (a.transfers !== b.transfers)
+            if (criteria === "fastest") {
+                // Tiêu chí 1: Nhanh nhất (Tổng thời gian di chuyển ít nhất)
+                if (a.totalDuration !== b.totalDuration)
+                    return a.totalDuration - b.totalDuration;
+                if (a.transfers !== null && b.transfers !== null && a.transfers !== b.transfers)
                     return a.transfers - b.transfers;
-            }
-            if (a.totalStops !== b.totalStops)
                 return a.totalStops - b.totalStops;
-            return a.totalDuration - b.totalDuration;
+            } else if (criteria === "fewest_stops") {
+                // Tiêu chí 2: Ít trạm dừng nhất (Fewest intermediate stops)
+                if (a.totalStops !== b.totalStops)
+                    return a.totalStops - b.totalStops;
+                if (a.totalDistance !== b.totalDistance)
+                    return a.totalDistance - b.totalDistance;
+                if (a.transfers !== null && b.transfers !== null && a.transfers !== b.transfers)
+                    return a.transfers - b.transfers;
+                return a.totalDuration - b.totalDuration;
+            } else {
+                // Tiêu chí 3 (Mặc định): Ít chuyển tuyến nhất
+                if (a.transfers !== null && b.transfers !== null) {
+                    if (a.transfers !== b.transfers)
+                        return a.transfers - b.transfers;
+                }
+                if (a.totalStops !== b.totalStops)
+                    return a.totalStops - b.totalStops;
+                return a.totalDuration - b.totalDuration;
+            }
         });
 
         const finalPaths = formattedPaths.slice(0, limit);
@@ -254,9 +277,18 @@ class RoutePlannerService {
             p.pathIndex = idx + 1;
         });
 
+        const criteriaLabel =
+            criteria === "fastest"
+                ? "Nhanh nhất"
+                : criteria === "fewest_stops"
+                ? "Ít trạm dừng nhất"
+                : "Ít chuyển tuyến nhất";
+
         return {
             source,
             traversalMode,
+            criteria,
+            criteriaLabel,
             from: {
                 id: fromStop.maTram || fromStop._key,
                 _id: fromStop._id,

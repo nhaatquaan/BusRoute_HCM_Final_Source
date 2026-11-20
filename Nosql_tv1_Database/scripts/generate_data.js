@@ -7,6 +7,65 @@
 const fs = require("fs");
 const path = require("path");
 
+const VALID_ROLES = ["admin", "operator", "passenger"];
+
+/**
+ * Chuẩn hóa vai trò người dùng (Standardize User Role)
+ * - Ưu tiên role chuẩn: admin, operator, passenger
+ * - Không để vai_tro ghi đè một role chuẩn đã tồn tại
+ * - Ánh xạ tường minh dữ liệu legacy (staff/user/vai_tro)
+ * - Ném lỗi khi gặp role không hợp lệ, tuyệt đối không gán ngầm staff hoặc passenger
+ */
+function resolveUserRole(user) {
+  if (!user || typeof user !== "object") {
+    throw new Error("Dữ liệu người dùng không hợp lệ (null/undefined/không phải object)");
+  }
+
+  const rawRole = typeof user.role === "string" ? user.role.trim().toLowerCase() : "";
+  const rawVaiTro = typeof user.vai_tro === "string" ? user.vai_tro.trim().toLowerCase() : "";
+  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+
+  // 1. Ưu tiên trường role chuẩn khi dữ liệu đã được chuẩn hóa (KHÔNG để vai_tro ghi đè)
+  if (VALID_ROLES.includes(rawRole)) {
+    return rawRole;
+  }
+
+  // 2. Hỗ trợ mapping dữ liệu legacy một cách tường minh:
+  // Case A: Dữ liệu legacy của Operator
+  if (
+    rawVaiTro === "operator" ||
+    (rawRole === "staff" && rawVaiTro === "admin") ||
+    email === "operator@busroute.vn"
+  ) {
+    return "operator";
+  }
+
+  // Case B: Dữ liệu legacy của Admin
+  if (
+    email === "admin@busroute.vn" ||
+    (rawVaiTro === "admin" && rawRole !== "staff")
+  ) {
+    return "admin";
+  }
+
+  // Case C: Dữ liệu legacy của Passenger
+  if (
+    rawVaiTro === "passenger" ||
+    rawVaiTro === "user" ||
+    rawRole === "user" ||
+    (rawRole === "staff" && rawVaiTro === "user") ||
+    email === "user@busroute.vn"
+  ) {
+    return "passenger";
+  }
+
+  // 3. Trường hợp không thể xác định role thì báo lỗi, không tự động gán staff hay passenger
+  throw new Error(
+    `Không thể xác định vai trò hợp lệ cho người dùng '${user.email || user.username || user._key || "Unknown"}'. Role='${user.role}', vai_tro='${user.vai_tro}'. Yêu cầu rà soát dữ liệu nguồn.`
+  );
+}
+
+function generateUnifiedData() {
 const jsonDir = path.join(__dirname, "../data/json");
 const csvDir = path.join(__dirname, "../data/csv");
 
@@ -277,14 +336,16 @@ const tramDung = rawTramDung.map((s) => {
 const rawNguoiDung = JSON.parse(fs.readFileSync(path.join(jsonDir, "NguoiDung.json"), "utf8"));
 const nguoiDung = rawNguoiDung.map((u) => {
   const username = u.email ? u.email.split("@")[0] : u._key.toLowerCase();
+  const role = resolveUserRole(u);
   return {
     ...u,
     id: u._key,
     username,
-    fullName: u.ho_ten,
-    role: u.vai_tro === "admin" ? "admin" : "staff",
-    status: u.trang_thai === "active" ? "active" : "locked",
-    createdAt: (u.ngay_tao || "2026-11-20").slice(0, 10)
+    fullName: u.ho_ten || u.fullName || username,
+    role,
+    vai_tro: role,
+    status: u.trang_thai === "active" || u.status === "active" ? "active" : "locked",
+    createdAt: (u.ngay_tao || u.createdAt || "2026-11-20").slice(0, 10)
   };
 });
 
@@ -331,7 +392,7 @@ fs.writeFileSync(
 
 fs.writeFileSync(
   path.join(csvDir, "NguoiDung.csv"),
-  toCSV(nguoiDung, ["_id", "_key", "ho_ten", "email", "mat_khau", "so_dien_thoai", "vai_tro", "trang_thai", "ngay_tao"]),
+  toCSV(nguoiDung, ["_id", "_key", "ho_ten", "email", "mat_khau", "so_dien_thoai", "vai_tro", "role", "trang_thai", "ngay_tao"]),
   "utf8"
 );
 
@@ -348,3 +409,14 @@ fs.writeFileSync(
 );
 
 console.log(`Generated unified data: ${tuyenXe.length} TuyenXe, ${tramDung.length} TramDung, ${coTramEdges.length} CO_TRAM, ${keTiepEdges.length} KE_TIEP.`);
+}
+
+if (require.main === module) {
+  generateUnifiedData();
+}
+
+module.exports = {
+  resolveUserRole,
+  VALID_ROLES,
+  generateUnifiedData
+};

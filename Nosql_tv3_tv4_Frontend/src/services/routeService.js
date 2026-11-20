@@ -13,7 +13,7 @@ export const routeService = {
     return list.map(normalizeId);
   },
 
-  async getById(id) {
+  async getById(id, direction = null) {
     if (USE_MOCK) {
       await delay();
       const routes = mockStore.getRoutes();
@@ -30,7 +30,10 @@ export const routeService = {
 
       return { ...route, stops: orderedStops };
     }
-    const { data } = await apiClient.get(`/api/routes/${id}`);
+    const endpoint = direction
+      ? `/api/routes/${id}/stops?ma_chieu=${direction}`
+      : `/api/routes/${id}`;
+    const { data } = await apiClient.get(endpoint);
     return normalizeId(data.data || data);
   },
 
@@ -89,8 +92,22 @@ export const routeService = {
     return data;
   },
 
-  // Gán trạm hoặc cập nhật toàn bộ danh sách thứ tự trạm của tuyến
-  async updateStopsOrder(routeId, orderedStopIds) {
+  // Gán trạm hoặc cập nhật toàn bộ danh sách thứ tự trạm của tuyến theo chiều di chuyển
+  async updateStopsOrder(routeId, stopsOrIds, direction = 'luot_di') {
+    const isArrayOfObjects = Array.isArray(stopsOrIds) && typeof stopsOrIds[0] === 'object';
+    const stopIds = isArrayOfObjects ? stopsOrIds.map((s) => s.id || s._id || s.code) : stopsOrIds;
+    const stopsPayload = isArrayOfObjects
+      ? stopsOrIds.map((s, idx) => ({
+          id: s.id || s._id || s.code,
+          khoang_cach_km: Number(s.khoang_cach_km || s.distance || (idx === 0 ? 0 : 1.5)),
+          thoi_gian_di_chuyen_phut: Number(s.thoi_gian_di_chuyen_phut || s.duration || (idx === 0 ? 0 : 5)),
+        }))
+      : stopIds.map((sid, idx) => ({
+          id: sid,
+          khoang_cach_km: idx === 0 ? 0 : 1.5,
+          thoi_gian_di_chuyen_phut: idx === 0 ? 0 : 5,
+        }));
+
     if (USE_MOCK) {
       await delay();
       const routes = mockStore.getRoutes();
@@ -98,16 +115,18 @@ export const routeService = {
         r.id === routeId
           ? {
               ...r,
-              stopIds: orderedStopIds,
+              stopIds,
               updatedAt: new Date().toISOString().slice(0, 10),
             }
           : r
       );
       mockStore.saveRoutes(updated);
-      return this.getById(routeId);
+      return this.getById(routeId, direction);
     }
     const { data } = await apiClient.put(`/api/routes/${routeId}/stops`, {
-      stopIds: orderedStopIds,
+      ma_chieu: direction,
+      stops: stopsPayload,
+      stopIds,
     });
     return data;
   },
