@@ -30,7 +30,7 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -39,7 +39,11 @@ import { routeService } from '../../../services/routeService';
 import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
-import { createMovingBusIcon, CITY_FLEET_ROUTES } from '../../route-planner/map/RouteMap.jsx';
+import {
+  createMovingBusIcon,
+  CITY_FLEET_ROUTES,
+  interpolateBusAlongRoad,
+} from '../../route-planner/map/RouteMap.jsx';
 
 // Fix Leaflet Default Icon in React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -69,8 +73,8 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboardData();
     const timer = setInterval(() => {
-      setTickProgress((prev) => (prev + 0.0022) % 1);
-    }, 60);
+      setTickProgress((prev) => (prev + 0.0003) % 2);
+    }, 80);
     return () => clearInterval(timer);
   }, []);
 
@@ -295,43 +299,32 @@ export default function DashboardPage() {
               );
             })}
 
-            {/* Đội xe buýt chạy trực tiếp trên bản đồ tổng quan thành phố */}
-            {stops.length >= 3 &&
-              CITY_FLEET_ROUTES.map((r, rIdx) => {
-                const routeStops = r.stopKeys
-                  .map((k) => stops.find((s) => (s.code || s.ma_tram || s.id) === k))
-                  .filter(Boolean);
-                const seq = routeStops.length >= 2 ? routeStops : stops.slice(0, 6);
-                if (seq.length < 2) return null;
-                const p = (tickProgress * 1.1 + rIdx * 0.17) % 1;
-                const totalSegs = seq.length - 1;
-                const exact = p * totalSegs;
-                const segIdx = Math.min(totalSegs - 1, Math.floor(exact));
-                const t = exact - segIdx;
-                const s1 = seq[segIdx];
-                const s2 = seq[segIdx + 1];
-                const lat1 = Number(s1.lat ?? s1.latitude ?? s1.vi_do);
-                const lng1 = Number(s1.lng ?? s1.longitude ?? s1.kinh_do);
-                const lat2 = Number(s2.lat ?? s2.latitude ?? s2.vi_do);
-                const lng2 = Number(s2.lng ?? s2.longitude ?? s2.kinh_do);
-                if (isNaN(lat1) || isNaN(lng1) || isNaN(lat2) || isNaN(lng2)) return null;
-
-                return (
-                  <Marker
-                    key={`dash-bus-${r.code}`}
-                    position={[lat1 + (lat2 - lat1) * t, lng1 + (lng2 - lng1) * t]}
-                    icon={createMovingBusIcon(r.code, r.color, false)}
-                  >
-                    <Popup>
-                      <div className="text-xs">
-                        <strong style={{ color: r.color }}>🚌 Tuyến {r.code}: {r.name}</strong>
-                        <div>Biển số: <strong>{r.plate1}</strong></div>
-                        <div>Đang chạy: {s1.name || s1.ten_tram} ➔ {s2.name || s2.ten_tram}</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
+            {/* Đường lộ trình và Đội xe buýt chạy trực tiếp bám theo mặt đường thành phố */}
+            {CITY_FLEET_ROUTES.map((r, rIdx) => {
+              const pos = interpolateBusAlongRoad(r.roadPath, tickProgress + rIdx * 0.28);
+              return (
+                <React.Fragment key={`dash-fleet-${r.code}`}>
+                  <Polyline
+                    positions={r.roadPath.map((pt) => [pt.lat, pt.lng])}
+                    pathOptions={{ color: r.color, weight: 3, opacity: 0.45 }}
+                  />
+                  {pos && (
+                    <Marker
+                      position={pos.coords}
+                      icon={createMovingBusIcon(r.code, r.color, false)}
+                    >
+                      <Popup>
+                        <div className="text-xs">
+                          <strong style={{ color: r.color }}>🚌 Tuyến {r.code}: {r.name}</strong>
+                          <div>Biển số: <strong>{r.plate1}</strong> ({pos.directionLabel})</div>
+                          <div>Đang chạy: {pos.fromStopName} ➔ {pos.toStopName}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </MapContainer>
         </div>
       </div>

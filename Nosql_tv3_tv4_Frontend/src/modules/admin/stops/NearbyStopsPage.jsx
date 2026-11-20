@@ -9,7 +9,7 @@ import {
   AlertCircle,
   ExternalLink
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -17,7 +17,11 @@ import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 import { StopDetailModal } from '../../route-planner/by-stop/StopDetailModal.jsx';
-import { createMovingBusIcon, CITY_FLEET_ROUTES } from '../../route-planner/map/RouteMap.jsx';
+import {
+  createMovingBusIcon,
+  CITY_FLEET_ROUTES,
+  interpolateBusAlongRoad,
+} from '../../route-planner/map/RouteMap.jsx';
 
 // Leaflet User Location Icon
 const userLocationIcon = new L.DivIcon({
@@ -63,8 +67,8 @@ export default function NearbyStopsPage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setTickProgress((prev) => (prev + 0.0025) % 1);
-    }, 60);
+      setTickProgress((prev) => (prev + 0.0003) % 2);
+    }, 80);
     return () => clearInterval(timer);
   }, []);
 
@@ -244,40 +248,32 @@ export default function NearbyStopsPage() {
               </Marker>
             ))}
 
-            {/* Các chiếc xe buýt mô phỏng đang chạy xung quanh trên bản đồ */}
-            {sortedStops.length >= 3 &&
-              CITY_FLEET_ROUTES.map((r, rIdx) => {
-                const routeStops = r.stopKeys
-                  .map((k) => sortedStops.find((s) => (s.code || s.ma_tram || s.id) === k))
-                  .filter(Boolean);
-                const seq = routeStops.length >= 2 ? routeStops : sortedStops.slice(0, 5);
-                if (seq.length < 2) return null;
-                const p = (tickProgress * 1.1 + rIdx * 0.17) % 1;
-                const totalSegs = seq.length - 1;
-                const exact = p * totalSegs;
-                const segIdx = Math.min(totalSegs - 1, Math.floor(exact));
-                const t = exact - segIdx;
-                const s1 = seq[segIdx];
-                const s2 = seq[segIdx + 1];
-                const lat = s1.parsedLat + (s2.parsedLat - s1.parsedLat) * t;
-                const lng = s1.parsedLng + (s2.parsedLng - s1.parsedLng) * t;
-
-                return (
-                  <Marker
-                    key={`nearby-bus-${r.code}`}
-                    position={[lat, lng]}
-                    icon={createMovingBusIcon(r.code, r.color, false)}
-                  >
-                    <Popup>
-                      <div className="text-xs">
-                        <strong style={{ color: r.color }}>🚌 Tuyến {r.code}: {r.name}</strong>
-                        <div>Biển số: <strong>{r.plate1}</strong></div>
-                        <div>Đang chạy: {s1.name || s1.ten_tram} ➔ {s2.name || s2.ten_tram}</div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
+            {/* Đường trục và các chiếc xe buýt mô phỏng chạy dọc theo đường phố */}
+            {CITY_FLEET_ROUTES.map((r, rIdx) => {
+              const pos = interpolateBusAlongRoad(r.roadPath, tickProgress + rIdx * 0.28);
+              return (
+                <React.Fragment key={`nearby-fleet-${r.code}`}>
+                  <Polyline
+                    positions={r.roadPath.map((pt) => [pt.lat, pt.lng])}
+                    pathOptions={{ color: r.color, weight: 3, opacity: 0.45 }}
+                  />
+                  {pos && (
+                    <Marker
+                      position={pos.coords}
+                      icon={createMovingBusIcon(r.code, r.color, false)}
+                    >
+                      <Popup>
+                        <div className="text-xs">
+                          <strong style={{ color: r.color }}>🚌 Tuyến {r.code}: {r.name}</strong>
+                          <div>Biển số: <strong>{r.plate1}</strong> ({pos.directionLabel})</div>
+                          <div>Đang chạy: {pos.fromStopName} ➔ {pos.toStopName}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </MapContainer>
         </div>
       </div>

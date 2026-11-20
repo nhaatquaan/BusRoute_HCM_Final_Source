@@ -7,8 +7,7 @@ import {
   Pause,
   Radio,
   Crosshair,
-  Navigation,
-  MousePointerClick,
+  Gauge,
 } from 'lucide-react';
 import {
   MapContainer,
@@ -22,11 +21,15 @@ import {
 } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { findNearestStopsFromCoords, formatDistance } from '../utils/routeHelpers.js';
+import {
+  findNearestStopsFromCoords,
+  formatDistance,
+  calculateDistanceMeters,
+} from '../utils/routeHelpers.js';
 import './map.css';
 
-// Tạo icon hình chiếc xe buýt đồ họa SVG sắc nét + sóng radar + xoay hướng đầu xe trên bản đồ
-const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false, angleDeg = 0) => {
+// Tạo icon hình chiếc xe buýt đồ họa SVG sắc nét + sóng radar trên bản đồ
+const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false) => {
   const scale = isPrimary ? 1.12 : 0.96;
   return new L.DivIcon({
     className: 'live-moving-bus-marker',
@@ -45,12 +48,12 @@ const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false, an
         <!-- Vòng sóng GPS tỏa ra dưới gầm xe -->
         <div style="
           position:absolute;
-          width:38px;
-          height:38px;
+          width:36px;
+          height:36px;
           border-radius:50%;
           background:${color};
           opacity:0.22;
-          animation:busPulseRing 1.6s infinite ease-out;
+          animation:busPulseRing 2s infinite ease-out;
         "></div>
 
         <!-- Nhãn số hiệu tuyến nổi trên nóc xe -->
@@ -70,33 +73,27 @@ const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false, an
           Tuyến ${routeCode}
         </div>
 
-        <!-- Hình chiếc xe buýt SVG có kính chắn gió, bánh xe & đèn pha -->
+        <!-- Hình chiếc xe buýt SVG -->
         <div style="
           z-index:2;
-          width:34px;
-          height:34px;
+          width:33px;
+          height:33px;
           border-radius:50%;
           background:#ffffff;
           border:2.5px solid ${color};
-          box-shadow:0 4px 10px rgba(0,0,0,0.35);
+          box-shadow:0 4px 10px rgba(0,0,0,0.32);
           display:flex;
           align-items:center;
           justify-content:center;
         ">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${angleDeg}deg);">
-            <!-- Thân xe buýt -->
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="3" width="16" height="15" rx="3.5" fill="${color}" />
-            <!-- Kính chắn gió trước -->
             <rect x="6" y="5" width="12" height="5" rx="1.5" fill="#e0f2fe" />
-            <!-- Đèn pha -->
             <circle cx="7.5" cy="14.5" r="1.5" fill="#fef08a" />
             <circle cx="16.5" cy="14.5" r="1.5" fill="#fef08a" />
-            <!-- Lưới tản nhiệt -->
             <rect x="10" y="14" width="4" height="1.5" rx="0.5" fill="#ffffff" opacity="0.8" />
-            <!-- Bánh xe -->
             <rect x="6" y="18" width="3" height="3" rx="1" fill="#1e293b" />
             <rect x="15" y="18" width="3" height="3" rx="1" fill="#1e293b" />
-            <!-- Gương chiếu hậu -->
             <rect x="2" y="6" width="2" height="3.5" rx="1" fill="${color}" />
             <rect x="20" y="6" width="2" height="3.5" rx="1" fill="${color}" />
           </svg>
@@ -114,7 +111,7 @@ function MapCameraController({ followCoords, centerCoords }) {
 
   useEffect(() => {
     if (followCoords && Array.isArray(followCoords) && followCoords.length === 2) {
-      map.panTo(followCoords, { animate: true, duration: 0.25 });
+      map.panTo(followCoords, { animate: true, duration: 0.3 });
     }
   }, [followCoords, map]);
 
@@ -139,57 +136,212 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
-// Đội xe buýt toàn thành phố (6 tuyến chính của TP.HCM chạy liên tục 24/7 trên bản đồ)
+/**
+ * 6 Tuyến xe buýt thực tế khớp 100% với CO_TRAM trong MongoDB kèm các tọa độ khúc cua đường phố thực tế
+ * (Trần Hưng Đạo, Hai Bà Trưng, Nguyễn Kiệm, Nguyễn Oanh, Nam Kỳ Khởi Nghĩa, Cộng Hòa, Trường Chinh,
+ * Lý Thường Kiệt, Điện Biên Phủ, Cầu Sài Gòn, Xa lộ Hà Nội, Trường Sơn) để xe luôn bám đúng mặt đường.
+ */
 const CITY_FLEET_ROUTES = [
   {
     code: '01',
-    name: 'Bến Thành - BX Chợ Lớn',
+    name: 'Bến Thành - Trần Hưng Đạo - BX Chợ Lớn',
     color: '#2563eb',
     plate1: '51B-101.24',
     plate2: '51B-101.89',
-    stopKeys: ['TR_01', 'TR_02', 'TR_03', 'TR_05', 'TR_07', 'TR_08'],
+    stopKeys: ['TR_03', 'TR_04', 'TR_02', 'TR_01', 'TR_05', 'TR_06', 'TR_07', 'TR_08'],
+    roadPath: [
+      { lat: 10.77456, lng: 106.70615, name: 'Công trường Mê Linh' },
+      { lat: 10.77092, lng: 106.70245, name: 'Chợ Cũ (Hàm Nghi)' },
+      { lat: 10.77168, lng: 106.70109, name: 'Trường Cao Thắng' },
+      { lat: 10.76895, lng: 106.69348, name: 'Bến Thành' },
+      { lat: 10.76420, lng: 106.69010, name: 'Trần Hưng Đạo (Q.1)' },
+      { lat: 10.75890, lng: 106.68510, name: 'Ngã tư Nguyễn Văn Cừ' },
+      { lat: 10.75541, lng: 106.68122, name: 'Trần Bình Trọng' },
+      { lat: 10.75320, lng: 106.67020, name: 'Trần Hưng Đạo (Q.5)' },
+      { lat: 10.75776, lng: 106.65947, name: 'Bệnh viện Chợ Rẫy' },
+      { lat: 10.75083, lng: 106.65995, name: 'Bưu điện Quận 5' },
+      { lat: 10.75162, lng: 106.65211, name: 'Bến xe Chợ Lớn' },
+    ],
   },
   {
     code: '03',
-    name: 'Bến Thành - Thạnh Lộc',
+    name: 'Bến Thành - Nguyễn Oanh - Thạnh Lộc',
     color: '#16866B',
     plate1: '51B-032.15',
     plate2: '51B-039.41',
-    stopKeys: ['TR_01', 'TR_09', 'TR_12', 'TR_23', 'TR_24', 'TR_25'],
+    stopKeys: ['TR_01', 'TR_02', 'TR_09', 'TR_23', 'TR_24', 'TR_25'],
+    roadPath: [
+      { lat: 10.76895, lng: 106.69348, name: 'Bến Thành' },
+      { lat: 10.77168, lng: 106.70109, name: 'Trường Cao Thắng' },
+      { lat: 10.77978, lng: 106.69902, name: 'Nhà thờ Đức Bà' },
+      { lat: 10.78850, lng: 106.68950, name: 'Cầu Kiệu (Hai Bà Trưng)' },
+      { lat: 10.79955, lng: 106.68112, name: 'Ngã tư Phú Nhuận' },
+      { lat: 10.81380, lng: 106.67910, name: 'Vòng xoay Nguyễn Thái Sơn' },
+      { lat: 10.82661, lng: 106.67895, name: 'Ngã sáu Gò Vấp' },
+      { lat: 10.84450, lng: 106.67780, name: 'Cầu An Lộc (Nguyễn Oanh)' },
+      { lat: 10.86200, lng: 106.67890, name: 'Hà Huy Giáp (Quận 12)' },
+      { lat: 10.88042, lng: 106.67988, name: 'Bến xe Thạnh Lộc' },
+    ],
   },
   {
     code: '04',
-    name: 'Bến Thành - BX An Sương',
+    name: 'Bến Thành - Cộng Hòa - BX An Sương',
     color: '#d97706',
     plate1: '51B-045.67',
     plate2: '51B-048.12',
-    stopKeys: ['TR_01', 'TR_10', 'TR_12', 'TR_13', 'TR_21', 'TR_22'],
+    stopKeys: ['TR_01', 'TR_10', 'TR_11', 'TR_12', 'TR_14', 'TR_15', 'TR_16'],
+    roadPath: [
+      { lat: 10.76895, lng: 106.69348, name: 'Bến Thành' },
+      { lat: 10.77699, lng: 106.69535, name: 'Dinh Độc Lập' },
+      { lat: 10.79156, lng: 106.68385, name: 'Chùa Vĩnh Nghiêm' },
+      { lat: 10.79750, lng: 106.67520, name: 'Nguyễn Văn Trỗi' },
+      { lat: 10.80168, lng: 106.66661, name: 'CV Hoàng Văn Thụ' },
+      { lat: 10.79331, lng: 106.65292, name: 'Ngã tư Bảy Hiền' },
+      { lat: 10.80120, lng: 106.65450, name: 'Lăng Cha Cả (Cộng Hòa)' },
+      { lat: 10.80320, lng: 106.64150, name: 'Đường Cộng Hòa (Tân Bình)' },
+      { lat: 10.81782, lng: 106.63175, name: 'Mũi tàu Cộng Hòa' },
+      { lat: 10.83150, lng: 106.62250, name: 'Trường Chinh (Tân Bình)' },
+      { lat: 10.84378, lng: 106.61334, name: 'Bến xe An Sương' },
+    ],
   },
   {
     code: '08',
-    name: 'BX Quận 8 - ĐH Quốc Gia',
+    name: 'BX Quận 8 - Hàng Xanh - ĐH Quốc Gia',
     color: '#7c3aed',
     plate1: '51B-081.33',
     plate2: '51B-086.90',
-    stopKeys: ['TR_14', 'TR_06', 'TR_11', 'TR_16', 'TR_18', 'TR_20'],
+    stopKeys: ['TR_22', 'TR_06', 'TR_14', 'TR_12', 'TR_23', 'TR_17', 'TR_18', 'TR_19', 'TR_20'],
+    roadPath: [
+      { lat: 10.73514, lng: 106.65439, name: 'Bến xe Quận 8' },
+      { lat: 10.74850, lng: 106.65780, name: 'Tùng Thiện Vương' },
+      { lat: 10.75776, lng: 106.65947, name: 'Bệnh viện Chợ Rẫy' },
+      { lat: 10.77240, lng: 106.65780, name: 'ĐH Bách Khoa (Lý Thường Kiệt)' },
+      { lat: 10.79331, lng: 106.65292, name: 'Ngã tư Bảy Hiền' },
+      { lat: 10.80168, lng: 106.66661, name: 'CV Hoàng Văn Thụ' },
+      { lat: 10.79955, lng: 106.68112, name: 'Ngã tư Phú Nhuận' },
+      { lat: 10.80250, lng: 106.69650, name: 'Chợ Bà Chiểu (Bạch Đằng)' },
+      { lat: 10.80123, lng: 106.71145, name: 'Ngã tư Hàng Xanh' },
+      { lat: 10.79920, lng: 106.72750, name: 'Cầu Sài Gòn' },
+      { lat: 10.80450, lng: 106.74450, name: 'Xa lộ Hà Nội (Thảo Điền)' },
+      { lat: 10.83155, lng: 106.76238, name: 'Ngã tư Bình Thái' },
+      { lat: 10.84850, lng: 106.77350, name: 'Ngã tư Thủ Đức' },
+      { lat: 10.85889, lng: 106.78762, name: 'Khu Công nghệ cao' },
+      { lat: 10.86620, lng: 106.80250, name: 'KDL Suối Tiên' },
+      { lat: 10.87815, lng: 106.80355, name: 'Bến xe ĐH Quốc Gia' },
+    ],
   },
   {
     code: '19',
-    name: 'Bến Thành - ĐH Quốc Gia',
+    name: 'Bến Thành - Điện Biên Phủ - ĐH Quốc Gia',
     color: '#dc2626',
     plate1: '51B-192.05',
     plate2: '51B-198.77',
-    stopKeys: ['TR_01', 'TR_09', 'TR_16', 'TR_17', 'TR_19', 'TR_20'],
+    stopKeys: ['TR_01', 'TR_04', 'TR_03', 'TR_09', 'TR_17', 'TR_18', 'TR_19', 'TR_20'],
+    roadPath: [
+      { lat: 10.76895, lng: 106.69348, name: 'Bến Thành' },
+      { lat: 10.77092, lng: 106.70245, name: 'Chợ Cũ' },
+      { lat: 10.77456, lng: 106.70615, name: 'Công trường Mê Linh' },
+      { lat: 10.77978, lng: 106.69902, name: 'Nhà thờ Đức Bà' },
+      { lat: 10.78920, lng: 106.69980, name: 'Điện Biên Phủ (Đa Kao)' },
+      { lat: 10.80123, lng: 106.71145, name: 'Ngã tư Hàng Xanh' },
+      { lat: 10.79920, lng: 106.72750, name: 'Cầu Sài Gòn' },
+      { lat: 10.80450, lng: 106.74450, name: 'Xa lộ Hà Nội (An Phú)' },
+      { lat: 10.83155, lng: 106.76238, name: 'Ngã tư Bình Thái' },
+      { lat: 10.84850, lng: 106.77350, name: 'Ngã tư Thủ Đức' },
+      { lat: 10.85889, lng: 106.78762, name: 'Khu Công nghệ cao' },
+      { lat: 10.87815, lng: 106.80355, name: 'Bến xe ĐH Quốc Gia' },
+    ],
   },
   {
     code: '152',
-    name: 'KDC Trung Sơn - Sân bay TSN',
+    name: 'KDC Trung Sơn - Bến Thành - Sân bay TSN',
     color: '#0891b2',
     plate1: '51B-152.38',
     plate2: '51B-152.94',
-    stopKeys: ['TR_15', 'TR_01', 'TR_10', 'TR_12', 'TR_13'],
+    stopKeys: ['TR_21', 'TR_05', 'TR_01', 'TR_10', 'TR_11', 'TR_23', 'TR_12', 'TR_13'],
+    roadPath: [
+      { lat: 10.73322, lng: 106.68811, name: 'KDC Trung Sơn' },
+      { lat: 10.74800, lng: 106.68600, name: 'Cầu Nguyễn Văn Cừ' },
+      { lat: 10.75541, lng: 106.68122, name: 'Trần Bình Trọng' },
+      { lat: 10.76895, lng: 106.69348, name: 'Bến Thành' },
+      { lat: 10.77699, lng: 106.69535, name: 'Dinh Độc Lập' },
+      { lat: 10.79156, lng: 106.68385, name: 'Chùa Vĩnh Nghiêm' },
+      { lat: 10.79955, lng: 106.68112, name: 'Ngã tư Phú Nhuận' },
+      { lat: 10.80168, lng: 106.66661, name: 'CV Hoàng Văn Thụ' },
+      { lat: 10.80950, lng: 106.66550, name: 'Đường Trường Sơn' },
+      { lat: 10.81665, lng: 106.66498, name: 'Sân bay Tân Sơn Nhất' },
+    ],
   },
 ];
+
+/**
+ * Hàm nội suy vị trí xe buýt có tính trọng số theo chiều dài thực tế của từng đoạn đường
+ * và chạy khứ hồi (Ping-Pong: đi tới bến cuối sẽ quay đầu chạy lượt về chứ không nhảy cóc).
+ */
+export function interpolateBusAlongRoad(waypoints, rawPhase) {
+  if (!waypoints || waypoints.length < 2) return null;
+
+  // Chuyển rawPhase thành chu kỳ khứ hồi [0 -> 1 -> 0] (0..1 là Lượt đi, 1..2 là Lượt về)
+  const cycle = ((rawPhase % 2) + 2) % 2;
+  const isReturnTrip = cycle > 1;
+  const normalizedProgress = isReturnTrip ? 2 - cycle : cycle;
+
+  // Tính khoảng cách từng chặng để vận tốc xe luôn đều đặn trên mọi đoạn đường
+  const segLengths = [];
+  let totalDist = 0;
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const p1 = waypoints[i];
+    const p2 = waypoints[i + 1];
+    const lat1 = Number(p1.lat ?? p1.latitude);
+    const lng1 = Number(p1.lng ?? p1.longitude);
+    const lat2 = Number(p2.lat ?? p2.latitude);
+    const lng2 = Number(p2.lng ?? p2.longitude);
+    const d = Math.max(50, calculateDistanceMeters(lat1, lng1, lat2, lng2));
+    segLengths.push(d);
+    totalDist += d;
+  }
+
+  const targetDist = normalizedProgress * totalDist;
+  let accumulated = 0;
+  let segIdx = 0;
+  for (let i = 0; i < segLengths.length; i++) {
+    if (accumulated + segLengths[i] >= targetDist || i === segLengths.length - 1) {
+      segIdx = i;
+      break;
+    }
+    accumulated += segLengths[i];
+  }
+
+  const localT = segLengths[segIdx] > 0 ? (targetDist - accumulated) / segLengths[segIdx] : 0;
+  const clampedT = Math.max(0, Math.min(1, localT));
+
+  const p1 = waypoints[segIdx];
+  const p2 = waypoints[segIdx + 1];
+  const lat1 = Number(p1.lat ?? p1.latitude);
+  const lng1 = Number(p1.lng ?? p1.longitude);
+  const lat2 = Number(p2.lat ?? p2.latitude);
+  const lng2 = Number(p2.lng ?? p2.longitude);
+
+  const lat = lat1 + (lat2 - lat1) * clampedT;
+  const lng = lng1 + (lng2 - lng1) * clampedT;
+
+  const fromName = isReturnTrip ? p2.name || 'Trạm trước' : p1.name || 'Trạm trước';
+  const toName = isReturnTrip ? p1.name || 'Trạm kế' : p2.name || 'Trạm kế';
+  const remainMeters = Math.round(
+    (isReturnTrip ? clampedT : 1 - clampedT) * segLengths[segIdx]
+  );
+  // Vận tốc xe buýt đô thị trung bình ~30 km/h (~500m/phút)
+  const etaNextMin = Math.max(1, Math.round(remainMeters / 480));
+
+  return {
+    coords: [lat, lng],
+    fromStopName: fromName,
+    toStopName: toName,
+    etaNextMin,
+    remainMeters,
+    directionLabel: isReturnTrip ? 'Lượt về' : 'Lượt đi',
+  };
+}
 
 export function RouteMap({
   path = null,
@@ -201,19 +353,22 @@ export function RouteMap({
   onPinSelectAsDestination,
 }) {
   const [simPlaying, setSimPlaying] = useState(true);
+  const [simSpeed, setSimSpeed] = useState(1); // 1x (Thực tế ~30km/h), 3x, 6x
   const [followBus, setFollowBus] = useState(false);
   const [showCityFleet, setShowCityFleet] = useState(true);
-  const [clickedPin, setClickedPin] = useState(null); // { lat, lng, nearestStop }
-  const [tickProgress, setTickProgress] = useState(0); // Tăng mượt 60ms/lần
+  const [clickedPin, setClickedPin] = useState(null);
+  const [tickPhase, setTickPhase] = useState(0); // Chu kỳ khứ hồi [0..2]
+  const [osrmRoadWaypoints, setOsrmRoadWaypoints] = useState(null);
 
-  // Chạy vòng lặp 60ms (~16 FPS) giúp tất cả xe buýt trượt liên tục không bị giật
+  // Vòng lặp 80ms với bước tiến rất nhỏ để xe buýt lướt êm đúng tốc độ thực ngoài đời (~30-35 km/h)
   useEffect(() => {
     if (!simPlaying) return;
     const interval = setInterval(() => {
-      setTickProgress((prev) => (prev + 0.0022) % 1);
-    }, 60);
+      // Ở tốc độ 1x: mất ~260 giây (hơn 4 phút) để đi hết toàn tuyến ~15km
+      setTickPhase((prev) => (prev + 0.0003 * simSpeed) % 2);
+    }, 80);
     return () => clearInterval(interval);
-  }, [simPlaying]);
+  }, [simPlaying, simSpeed]);
 
   // Chuẩn hóa toàn bộ danh sách trạm có tọa độ hợp lệ
   const validAllStops = useMemo(() => {
@@ -229,15 +384,6 @@ export function RouteMap({
       .filter((s) => !isNaN(s.latitude) && !isNaN(s.longitude) && s.latitude !== 0);
   }, [allStops]);
 
-  const stopLookupMap = useMemo(() => {
-    const map = new globalThis.Map();
-    validAllStops.forEach((s) => {
-      map.set(s.id, s);
-      if (s._key) map.set(s._key, s);
-    });
-    return map;
-  }, [validAllStops]);
-
   // Các trạm của lộ trình đang chọn (nếu người dùng đã tìm đường)
   const pathStopsWithCoords = useMemo(() => {
     if (!path || !Array.isArray(path.stops)) return [];
@@ -248,42 +394,57 @@ export function RouteMap({
 
   const hasActivePath = pathStopsWithCoords.length >= 2;
 
-  // Hàm nội suy vị trí chiếc xe buýt chạy dọc theo một dãy trạm
-  const interpolateAlongStops = (stopsSeq, progressVal) => {
-    if (!stopsSeq || stopsSeq.length < 2) return null;
-    const p = ((progressVal % 1) + 1) % 1;
-    const totalSegs = stopsSeq.length - 1;
-    const exact = p * totalSegs;
-    const segIdx = Math.min(totalSegs - 1, Math.floor(exact));
-    const t = exact - segIdx;
-    const s1 = stopsSeq[segIdx];
-    const s2 = stopsSeq[segIdx + 1];
-    const lat = s1.latitude + (s2.latitude - s1.latitude) * t;
-    const lng = s1.longitude + (s2.longitude - s1.longitude) * t;
-    const remainRatio = 1 - t;
-    const etaNextMin = Math.max(1, Math.round(remainRatio * 4));
-    return {
-      coords: [lat, lng],
-      fromStopName: s1.name,
-      toStopName: s2.name,
-      etaNextMin,
-      segIdx,
-    };
-  };
+  // Khi người dùng tìm lộ trình: Tự động gọi OSRM Routing API để lấy đường cong bám theo mặt đường thật trên bản đồ
+  useEffect(() => {
+    if (!hasActivePath) {
+      setOsrmRoadWaypoints(null);
+      return;
+    }
+    let cancelled = false;
 
-  // Tính toán vị trí 12 chiếc xe buýt toàn thành phố chạy liên tục
+    async function fetchRealStreetGeometry() {
+      try {
+        const coordsStr = pathStopsWithCoords
+          .map((s) => `${s.longitude},${s.latitude}`)
+          .join(';');
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('OSRM unavailable');
+        const data = await res.json();
+        const coords = data?.routes?.[0]?.geometry?.coordinates;
+        if (!cancelled && Array.isArray(coords) && coords.length >= 2) {
+          // Gán tên trạm gần nhất cho từng điểm trên đường phố thực tế
+          const waypoints = coords.map(([lng, lat]) => {
+            let bestName = pathStopsWithCoords[0].name;
+            let minDist = Infinity;
+            pathStopsWithCoords.forEach((st) => {
+              const d = calculateDistanceMeters(lat, lng, st.latitude, st.longitude);
+              if (d < minDist) {
+                minDist = d;
+                bestName = st.name;
+              }
+            });
+            return { lat, lng, name: bestName };
+          });
+          setOsrmRoadWaypoints(waypoints);
+        }
+      } catch (_) {
+        if (!cancelled) setOsrmRoadWaypoints(null);
+      }
+    }
+
+    fetchRealStreetGeometry();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasActivePath, pathStopsWithCoords]);
+
+  // Tính toán vị trí 12 chiếc xe buýt toàn thành phố chạy bám theo các trục đường chính
   const activeFleetBuses = useMemo(() => {
-    if (validAllStops.length < 3) return [];
     const list = [];
     CITY_FLEET_ROUTES.forEach((r, rIdx) => {
-      const routeStops = r.stopKeys
-        .map((k) => stopLookupMap.get(k))
-        .filter(Boolean);
-      const seq = routeStops.length >= 2 ? routeStops : validAllStops.slice(0, 6);
-      const revSeq = [...seq].reverse();
-
-      // Xe lượt đi
-      const pos1 = interpolateAlongStops(seq, (tickProgress * 1.1 + rIdx * 0.17) % 1);
+      // Xe 1 (xuất phát đầu tuyến)
+      const pos1 = interpolateBusAlongRoad(r.roadPath, tickPhase + rIdx * 0.28);
       if (pos1) {
         list.push({
           id: `FLEET_${r.code}_1`,
@@ -291,14 +452,13 @@ export function RouteMap({
           routeName: r.name,
           color: r.color,
           plate: r.plate1,
-          directionLabel: 'Lượt đi',
-          speedKmh: 28 + (rIdx % 7),
+          speedKmh: 28 + (rIdx % 6),
           ...pos1,
         });
       }
 
-      // Xe lượt về
-      const pos2 = interpolateAlongStops(revSeq, (tickProgress * 0.95 + rIdx * 0.23 + 0.45) % 1);
+      // Xe 2 (chạy lệch pha ngược chiều trên cùng trục đường)
+      const pos2 = interpolateBusAlongRoad(r.roadPath, tickPhase + 1.0 + rIdx * 0.31);
       if (pos2) {
         list.push({
           id: `FLEET_${r.code}_2`,
@@ -306,23 +466,33 @@ export function RouteMap({
           routeName: r.name,
           color: r.color,
           plate: r.plate2,
-          directionLabel: 'Lượt về',
-          speedKmh: 26 + ((rIdx * 3) % 8),
+          speedKmh: 27 + ((rIdx * 2) % 7),
           ...pos2,
         });
       }
     });
     return list;
-  }, [validAllStops, stopLookupMap, tickProgress]);
+  }, [tickPhase]);
 
-  // Nếu đang có lộ trình tìm kiếm: tính 2 chiếc xe đang chạy trực tiếp trên lộ trình đó
+  // Nếu đang có lộ trình tìm kiếm: ưu tiên chạy trên đường phố OSRM thực tế (hoặc qua danh sách trạm)
+  const activePathWaypoints = useMemo(() => {
+    if (osrmRoadWaypoints && osrmRoadWaypoints.length >= 2) {
+      return osrmRoadWaypoints;
+    }
+    return pathStopsWithCoords.map((s) => ({
+      lat: s.latitude,
+      lng: s.longitude,
+      name: s.name,
+    }));
+  }, [osrmRoadWaypoints, pathStopsWithCoords]);
+
   const primaryRouteCode = path?.routes?.[0] || '01';
   const routeColor = path?.routeDetails?.[0]?.mauSac || '#2563eb';
   const activeBus1 = hasActivePath
-    ? interpolateAlongStops(pathStopsWithCoords, (tickProgress * 1.35) % 1)
+    ? interpolateBusAlongRoad(activePathWaypoints, tickPhase * 1.15)
     : null;
   const activeBus2 = hasActivePath
-    ? interpolateAlongStops(pathStopsWithCoords, (tickProgress * 1.35 + 0.5) % 1)
+    ? interpolateBusAlongRoad(activePathWaypoints, tickPhase * 1.15 + 0.65)
     : null;
 
   // Xác định trạm chuyển tuyến trên lộ trình
@@ -334,7 +504,7 @@ export function RouteMap({
         if (segTo) {
           if (segTo.maTram) set.add(segTo.maTram);
           if (segTo.id) set.add(segTo.id);
-          if (segTo._key) set.add(segTo.key);
+          if (segTo._key) set.add(segTo._key);
           if (segTo._id) set.add(segTo._id);
         }
       }
@@ -355,8 +525,12 @@ export function RouteMap({
   const centerLat = hasActivePath ? pathStopsWithCoords[0].latitude : 10.7769;
   const centerLng = hasActivePath ? pathStopsWithCoords[0].longitude : 106.6953;
   const polylinePositions = hasActivePath
-    ? pathStopsWithCoords.map((s) => [s.latitude, s.longitude])
+    ? activePathWaypoints.map((pt) => [pt.lat, pt.lng])
     : [];
+
+  const cycleSpeed = () => {
+    setSimSpeed((prev) => (prev === 1 ? 3 : prev === 3 ? 6 : 1));
+  };
 
   return (
     <div className="route-map-container">
@@ -376,7 +550,7 @@ export function RouteMap({
             <MapIcon size={20} color="#2563eb" />
             <span>
               {hasActivePath
-                ? 'Bản đồ Lộ trình & Theo dõi Xe buýt Thời gian thực (Live GPS)'
+                ? 'Bản đồ Lộ trình & Theo dõi Xe buýt Thời gian thực (Bám theo Đường phố)'
                 : 'Bản đồ Trực tiếp Mạng lưới Xe buýt TP.HCM (Google Maps Transit Mode)'}
             </span>
           </h4>
@@ -416,10 +590,34 @@ export function RouteMap({
             <Radio size={12} />
             <span>
               {hasActivePath
-                ? 'Đang theo dõi xe trên lộ trình'
-                : `${activeFleetBuses.length} xe buýt đang chạy trực tiếp`}
+                ? 'Đang bám theo mặt đường thực tế'
+                : `${activeFleetBuses.length} xe buýt đang chạy đúng tuyến đường`}
             </span>
           </span>
+
+          <button
+            type="button"
+            onClick={cycleSpeed}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              background: '#fef3c7',
+              color: '#92400e',
+              border: '1px solid #fde68a',
+              borderRadius: '8px',
+              padding: '5px 10px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+            title="Chỉnh tốc độ di chuyển của xe buýt mô phỏng"
+          >
+            <Gauge size={13} />
+            <span>
+              Tốc độ: {simSpeed === 1 ? '1x (Thực tế ~30km/h)' : `${simSpeed}x (Tua nhanh)`}
+            </span>
+          </button>
 
           {hasActivePath && (
             <button
@@ -508,12 +706,27 @@ export function RouteMap({
             centerCoords={hasActivePath ? [centerLat, centerLng] : null}
           />
 
-          {/* 1. Vẽ toàn bộ 25 bến xe buýt trên bản đồ (Khi chưa chọn lộ trình hoặc làm nền) */}
+          {/* 0. Vẽ đường trục lộ trình của 6 tuyến xe thành phố để thấy rõ đường xe chạy */}
+          {(showCityFleet || !hasActivePath) &&
+            CITY_FLEET_ROUTES.map((r) => (
+              <Polyline
+                key={`fleet-road-${r.code}`}
+                positions={r.roadPath.map((pt) => [pt.lat, pt.lng])}
+                pathOptions={{
+                  color: r.color,
+                  weight: hasActivePath ? 2.5 : 3.5,
+                  opacity: hasActivePath ? 0.3 : 0.55,
+                  dashArray: hasActivePath ? '4, 6' : undefined,
+                }}
+              />
+            ))}
+
+          {/* 1. Vẽ toàn bộ 25 bến xe buýt trên bản đồ */}
           {validAllStops.map((stop) => {
             const isInActivePath =
               hasActivePath &&
               pathStopsWithCoords.some((ps) => ps.id === stop.id || ps._id === stop._id);
-            if (isInActivePath) return null; // Đã được vẽ nổi bật ở mục 4
+            if (isInActivePath) return null;
 
             return (
               <CircleMarker
@@ -521,10 +734,10 @@ export function RouteMap({
                 center={[stop.latitude, stop.longitude]}
                 radius={6}
                 pathOptions={{
-                  fillColor: '#64748b',
+                  fillColor: '#475569',
                   color: '#ffffff',
                   weight: 1.5,
-                  fillOpacity: 0.75,
+                  fillOpacity: 0.85,
                 }}
               >
                 <Popup>
@@ -615,7 +828,7 @@ export function RouteMap({
             );
           })}
 
-          {/* 2. Đội xe buýt toàn thành phố chạy liên tục trên bản đồ */}
+          {/* 2. Đội xe buýt toàn thành phố chạy bám theo đường phố trên bản đồ */}
           {(showCityFleet || !hasActivePath) &&
             activeFleetBuses.map((bus) => (
               <Marker
@@ -747,7 +960,7 @@ export function RouteMap({
             </>
           )}
 
-          {/* 4. Nếu đã tìm lộ trình: Vẽ đường lộ trình nổi bật, đường đi bộ ra bến, và 2 xe buýt của lộ trình */}
+          {/* 4. Nếu đã tìm lộ trình: Vẽ đường lộ trình bám phố OSRM, đường đi bộ ra bến, và 2 xe buýt của lộ trình */}
           {hasActivePath && (
             <>
               <Polyline
@@ -755,8 +968,7 @@ export function RouteMap({
                 pathOptions={{
                   color: routeColor,
                   weight: 6,
-                  opacity: 0.9,
-                  dashArray: path.transfers > 0 ? '8, 6' : undefined,
+                  opacity: 0.92,
                 }}
               />
 
@@ -839,7 +1051,7 @@ export function RouteMap({
                 </Marker>
               )}
 
-              {activeBus2 && pathStopsWithCoords.length > 3 && (
+              {activeBus2 && pathStopsWithCoords.length > 2 && (
                 <Marker
                   position={activeBus2.coords}
                   icon={createMovingBusIcon(
@@ -969,7 +1181,7 @@ export function RouteMap({
           <span>🟢 <strong>Chấm xanh lá:</strong> Bến xuất phát</span>
           <span>🟠 <strong>Chấm cam:</strong> Bến đổi tuyến</span>
           <span>🔴 <strong>Chấm đỏ:</strong> Bến đích</span>
-          <span>🚌 <strong>Icon xe di chuyển:</strong> Vị trí xe buýt thời gian thực</span>
+          <span>🚌 <strong>Icon xe di chuyển:</strong> Xe chạy khứ hồi bám dọc theo trục đường phố</span>
         </div>
         <span style={{ fontStyle: 'italic', color: '#64748b' }}>
           Click chuột vào điểm bất kỳ trên bản đồ để chọn Điểm đi / Điểm đến như Google Maps
