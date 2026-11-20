@@ -9,7 +9,7 @@ import {
   AlertCircle,
   ExternalLink
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -17,11 +17,6 @@ import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 import { StopDetailModal } from '../../route-planner/by-stop/StopDetailModal.jsx';
-import {
-  createMovingBusIcon,
-  CITY_FLEET_ROUTES,
-  interpolateBusAlongRoad,
-} from '../../route-planner/map/RouteMap.jsx';
 
 // Leaflet User Location Icon
 const userLocationIcon = new L.DivIcon({
@@ -63,14 +58,6 @@ export default function NearbyStopsPage() {
   const [locError, setLocError] = useState('');
   const [sortedStops, setSortedStops] = useState([]);
   const [inspectingStop, setInspectingStop] = useState(null);
-  const [tickProgress, setTickProgress] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTickProgress((prev) => (prev + 0.0003) % 2);
-    }, 80);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     loadStops();
@@ -247,33 +234,6 @@ export default function NearbyStopsPage() {
                 </Popup>
               </Marker>
             ))}
-
-            {/* Đường trục và các chiếc xe buýt mô phỏng chạy dọc theo đường phố */}
-            {CITY_FLEET_ROUTES.map((r, rIdx) => {
-              const pos = interpolateBusAlongRoad(r.roadPath, tickProgress + rIdx * 0.28);
-              return (
-                <React.Fragment key={`nearby-fleet-${r.code}`}>
-                  <Polyline
-                    positions={r.roadPath.map((pt) => [pt.lat, pt.lng])}
-                    pathOptions={{ color: r.color, weight: 3, opacity: 0.45 }}
-                  />
-                  {pos && (
-                    <Marker
-                      position={pos.coords}
-                      icon={createMovingBusIcon(r.code, r.color, false)}
-                    >
-                      <Popup>
-                        <div className="text-xs">
-                          <strong style={{ color: r.color }}>🚌 Tuyến {r.code}: {r.name}</strong>
-                          <div>Biển số: <strong>{r.plate1}</strong> ({pos.directionLabel})</div>
-                          <div>Đang chạy: {pos.fromStopName} ➔ {pos.toStopName}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  )}
-                </React.Fragment>
-              );
-            })}
           </MapContainer>
         </div>
       </div>
