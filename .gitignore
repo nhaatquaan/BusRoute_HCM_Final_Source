@@ -83,6 +83,10 @@ web_modules/
 *.rar
 *.zip
 
+# Runtime and pre-migration backups containing sensitive user snapshots
+*pre_migration*
+Nosql_tv1_Database/backup/*pre_migration*.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
