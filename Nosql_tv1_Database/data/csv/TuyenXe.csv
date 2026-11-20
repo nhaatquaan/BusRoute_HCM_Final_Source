@@ -1,0 +1,7 @@
+_id,_key,ma_tuyen,ten_tuyen,diem_dau,diem_cuoi,cu_ly_km,bat_dau,ket_thuc,gia_ve,trang_thai
+TuyenXe/TX_01,TX_01,01,Bến Thành - Bến xe Chợ Lớn,Công trường Mê Linh,Bến xe Chợ Lớn,8.6,05:00,20:15,6000,active
+TuyenXe/TX_03,TX_03,03,Bến Thành - Thạnh Lộc,Bến xe buýt Sài Gòn,Thạnh Lộc,20.6,04:00,20:45,6000,active
+TuyenXe/TX_04,TX_04,04,Bến Thành - Cộng Hòa - Bến xe An Sương,Bến xe buýt Sài Gòn,Bến xe An Sương,16.4,05:00,20:15,6000,active
+TuyenXe/TX_08,TX_08,08,Bến xe Quận 8 - Đại học Quốc gia,Bến xe Quận 8,Ký túc xá Khu A ĐHQG,28,04:40,20:30,7000,active
+TuyenXe/TX_19,TX_19,19,Bến Thành - Khu chế xuất Linh Trung - Đại học Quốc gia,Bến xe buýt Sài Gòn,Bến xe buýt ĐHQG,28.1,05:00,20:15,7000,active
+TuyenXe/TX_152,TX_152,152,Khu dân cư Trung Sơn - Bến Thành - Sân bay Tân Sơn Nhất,Chỗ đậu xe buýt cuối đường số 10 (KDC Trung Sơn),Sân bay Tân Sơn Nhất,15.1,05:15,19:00,5000,active

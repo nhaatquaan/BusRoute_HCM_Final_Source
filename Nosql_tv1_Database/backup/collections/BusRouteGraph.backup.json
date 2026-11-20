@@ -1,0 +1,36 @@
+[
+  {
+    "_id": "BusRouteGraph/GRAPH_DEF",
+    "_key": "GRAPH_DEF",
+    "graph_name": "BusRouteGraph",
+    "database": "BusRouteDB",
+    "vertex_collections": [
+      "TuyenXe",
+      "TramDung",
+      "NguoiDung"
+    ],
+    "edge_definitions": [
+      {
+        "collection": "CO_TRAM",
+        "from": [
+          "TuyenXe"
+        ],
+        "to": [
+          "TramDung"
+        ],
+        "description": "Cạnh nối từ Tuyến xe đến Trạm dừng theo chiều và thứ tự"
+      },
+      {
+        "collection": "KE_TIEP",
+        "from": [
+          "TramDung"
+        ],
+        "to": [
+          "TramDung"
+        ],
+        "description": "Cạnh có hướng nối Trạm dừng hiện tại sang Trạm dừng kế tiếp kèm khoảng cách và thời gian"
+      }
+    ],
+    "created_at": "2026-11-20T06:26:11.067Z"
+  }
+]

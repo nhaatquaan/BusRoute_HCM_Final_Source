@@ -1,0 +1,32 @@
+{
+  "name": "busroutebackend",
+  "version": "2.0.0",
+  "description": "BUSROUTE HCM - Backend API quản lý và tra cứu lộ trình xe buýt TP.HCM kết nối MongoDB",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test tests/**/*.test.js",
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "mongodb",
+    "nosql",
+    "busroute",
+    "graph",
+    "express"
+  ],
+  "author": "BUSROUTE HCM Team",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.9.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

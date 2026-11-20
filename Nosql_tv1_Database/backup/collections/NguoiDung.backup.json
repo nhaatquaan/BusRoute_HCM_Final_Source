@@ -1,0 +1,53 @@
+[
+  {
+    "_id": "NguoiDung/USR_01",
+    "_key": "USR_01",
+    "ho_ten": "Quản trị viên Hệ thống",
+    "email": "admin@busroute.vn",
+    "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
+    "so_dien_thoai": "0901234567",
+    "vai_tro": "admin",
+    "trang_thai": "active",
+    "ngay_tao": "2026-11-20T01:00:00.000Z",
+    "id": "USR_01",
+    "username": "admin",
+    "fullName": "Quản trị viên Hệ thống",
+    "role": "admin",
+    "status": "active",
+    "createdAt": "2026-11-20"
+  },
+  {
+    "_id": "NguoiDung/USR_02",
+    "_key": "USR_02",
+    "ho_ten": "Nguyễn Văn Điều Hành",
+    "email": "operator@busroute.vn",
+    "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
+    "so_dien_thoai": "0909888777",
+    "vai_tro": "admin",
+    "trang_thai": "active",
+    "ngay_tao": "2026-11-20T01:05:00.000Z",
+    "id": "USR_02",
+    "username": "operator",
+    "fullName": "Nguyễn Văn Điều Hành",
+    "role": "admin",
+    "status": "active",
+    "createdAt": "2026-11-20"
+  },
+  {
+    "_id": "NguoiDung/USR_03",
+    "_key": "USR_03",
+    "ho_ten": "Trần Thị Hành Khách",
+    "email": "user@busroute.vn",
+    "mat_khau": "$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a",
+    "so_dien_thoai": "0912345678",
+    "vai_tro": "user",
+    "trang_thai": "active",
+    "ngay_tao": "2026-11-20T01:10:00.000Z",
+    "id": "USR_03",
+    "username": "user",
+    "fullName": "Trần Thị Hành Khách",
+    "role": "staff",
+    "status": "active",
+    "createdAt": "2026-11-20"
+  }
+]

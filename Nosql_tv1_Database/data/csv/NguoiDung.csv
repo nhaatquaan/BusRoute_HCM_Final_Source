@@ -1,0 +1,4 @@
+_id,_key,ho_ten,email,mat_khau,so_dien_thoai,vai_tro,trang_thai,ngay_tao
+NguoiDung/USR_01,USR_01,Quản trị viên Hệ thống,admin@busroute.vn,$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a,0901234567,admin,active,2026-11-20T01:00:00.000Z
+NguoiDung/USR_02,USR_02,Nguyễn Văn Điều Hành,operator@busroute.vn,$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a,0909888777,admin,active,2026-11-20T01:05:00.000Z
+NguoiDung/USR_03,USR_03,Trần Thị Hành Khách,user@busroute.vn,$2b$10$oUTLu4POk37.vjqvhcaUROoB4KKghjgVfCTQWssnfeoZjNFEr6w6a,0912345678,user,active,2026-11-20T01:10:00.000Z

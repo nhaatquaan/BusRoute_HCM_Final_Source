@@ -1,0 +1,26 @@
+_id,_key,ma_tram,ten_tram,dia_chi,vi_do,kinh_do,trang_thai
+TramDung/TR_01,TR_01,TR_01,Bến xe buýt Sài Gòn (Bến Thành),"Công viên 23/9, Phường Phạm Ngũ Lão, Quận 1, TP.HCM",10.76895,106.69348,active
+TramDung/TR_02,TR_02,TR_02,Trường Cao Thắng,"65 Huỳnh Thúc Kháng, Phường Bến Nghé, Quận 1, TP.HCM",10.77168,106.70109,active
+TramDung/TR_03,TR_03,TR_03,Công trường Mê Linh,"Công trường Mê Linh, Phường Bến Nghé, Quận 1, TP.HCM",10.77456,106.70615,active
+TramDung/TR_04,TR_04,TR_04,Chợ Cũ,"84 Hàm Nghi, Phường Bến Nghé, Quận 1, TP.HCM",10.77092,106.70245,active
+TramDung/TR_05,TR_05,TR_05,Trần Bình Trọng,"410 Trần Hưng Đạo, Phường 2, Quận 5, TP.HCM",10.75541,106.68122,active
+TramDung/TR_06,TR_06,TR_06,Bệnh viện Chợ Rẫy,"201B Nguyễn Chí Thanh, Phường 12, Quận 5, TP.HCM",10.75776,106.65947,active
+TramDung/TR_07,TR_07,TR_07,Bưu điện Quận 5,"34 Hải Thượng Lãn Ông, Phường 10, Quận 5, TP.HCM",10.75083,106.65995,active
+TramDung/TR_08,TR_08,TR_08,Bến xe Chợ Lớn,"86 Trang Tử, Phường 14, Quận 5, TP.HCM",10.75162,106.65211,active
+TramDung/TR_09,TR_09,TR_09,Nhà thờ Đức Bà,"01 Công xã Paris, Phường Bến Nghé, Quận 1, TP.HCM",10.77978,106.69902,active
+TramDung/TR_10,TR_10,TR_10,Dinh Độc Lập,"135 Nam Kỳ Khởi Nghĩa, Phường Bến Thành, Quận 1, TP.HCM",10.77699,106.69535,active
+TramDung/TR_11,TR_11,TR_11,Chùa Vĩnh Nghiêm,"339 Nam Kỳ Khởi Nghĩa, Phường Võ Thị Sáu, Quận 3, TP.HCM",10.79156,106.68385,active
+TramDung/TR_12,TR_12,TR_12,Công viên Hoàng Văn Thụ,"Phan Đình Giót, Phường 2, Quận Tân Bình, TP.HCM",10.80168,106.66661,active
+TramDung/TR_13,TR_13,TR_13,Sân bay Tân Sơn Nhất,"Trường Sơn, Phường 2, Quận Tân Bình, TP.HCM",10.81665,106.66498,active
+TramDung/TR_14,TR_14,TR_14,Ngã tư Bảy Hiền,"Hoàng Văn Thụ, Phường 4, Quận Tân Bình, TP.HCM",10.79331,106.65292,active
+TramDung/TR_15,TR_15,TR_15,Mũi tàu Cộng Hòa,"19B1 Trường Chinh, Phường 15, Quận Tân Bình, TP.HCM",10.81782,106.63175,active
+TramDung/TR_16,TR_16,TR_16,Bến xe An Sương,"Quốc lộ 22, Xã Bà Điểm, Huyện Hóc Môn, TP.HCM",10.84378,106.61334,active
+TramDung/TR_17,TR_17,TR_17,Ngã tư Hàng Xanh,"Điện Biên Phủ, Phường 15, Quận Bình Thạnh, TP.HCM",10.80123,106.71145,active
+TramDung/TR_18,TR_18,TR_18,Ngã tư Bình Thái,"Xa lộ Hà Nội, Phường Trường Thọ, TP. Thủ Đức, TP.HCM",10.83155,106.76238,active
+TramDung/TR_19,TR_19,TR_19,Khu công nghệ cao TP.HCM,"Xa lộ Hà Nội, Phường Hiệp Phú, TP. Thủ Đức, TP.HCM",10.85889,106.78762,active
+TramDung/TR_20,TR_20,TR_20,Bến xe buýt Đại học Quốc gia,"Khu đô thị ĐHQG, Phường Đông Hòa, TP. Thủ Đức, TP.HCM",10.87815,106.80355,active
+TramDung/TR_21,TR_21,TR_21,Khu dân cư Trung Sơn,"Đường số 10, Khu dân cư Trung Sơn, Huyện Bình Chánh, TP.HCM",10.73322,106.68811,active
+TramDung/TR_22,TR_22,TR_22,Bến xe Quận 8,"Quốc lộ 50, Phường 5, Quận 8, TP.HCM",10.73514,106.65439,active
+TramDung/TR_23,TR_23,TR_23,Ngã tư Phú Nhuận,"Phan Đăng Lưu, Phường 3, Quận Phú Nhuận, TP.HCM",10.79955,106.68112,active
+TramDung/TR_24,TR_24,TR_24,Ngã sáu Gò Vấp,"Nguyễn Oanh, Phường 7, Quận Gò Vấp, TP.HCM",10.82661,106.67895,active
+TramDung/TR_25,TR_25,TR_25,Bến xe buýt Thạnh Lộc,"Hà Huy Giáp, Phường Thạnh Lộc, Quận 12, TP.HCM",10.88042,106.67988,active
