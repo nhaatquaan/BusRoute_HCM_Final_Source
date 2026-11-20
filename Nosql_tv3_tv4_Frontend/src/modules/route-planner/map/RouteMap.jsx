@@ -24,34 +24,88 @@ import L from 'leaflet';
 import { findNearestStopsFromCoords, formatDistance } from '../utils/routeHelpers.js';
 import './map.css';
 
-// Tạo icon chiếc xe buýt di chuyển liên tục trên bản đồ (kiểu Google Maps / BusMap Live)
-const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false) =>
-  new L.DivIcon({
+// Tạo icon hình chiếc xe buýt đồ họa SVG sắc nét + sóng radar + xoay hướng đầu xe trên bản đồ
+const createMovingBusIcon = (routeCode, color = '#2563eb', isPrimary = false, angleDeg = 0) => {
+  const scale = isPrimary ? 1.12 : 0.96;
+  return new L.DivIcon({
     className: 'live-moving-bus-marker',
     html: `
       <div style="
         position:relative;
+        width:68px;
+        height:54px;
         display:flex;
+        flex-direction:column;
         align-items:center;
-        gap:3px;
-        background:${color};
-        color:#fff;
-        font-weight:800;
-        font-size:${isPrimary ? '11px' : '10px'};
-        padding:${isPrimary ? '4px 9px' : '3px 7px'};
-        border-radius:999px;
-        border:2px solid #ffffff;
-        box-shadow:0 4px 12px rgba(0,0,0,0.4);
-        white-space:nowrap;
-        transform:translate(-50%, -50%);
-        transition:transform 0.15s linear;
+        justify-content:center;
+        transform:translate(-50%, -50%) scale(${scale});
+        pointer-events:auto;
       ">
-        <span>🚌 T${routeCode}</span>
+        <!-- Vòng sóng GPS tỏa ra dưới gầm xe -->
+        <div style="
+          position:absolute;
+          width:38px;
+          height:38px;
+          border-radius:50%;
+          background:${color};
+          opacity:0.22;
+          animation:busPulseRing 1.6s infinite ease-out;
+        "></div>
+
+        <!-- Nhãn số hiệu tuyến nổi trên nóc xe -->
+        <div style="
+          z-index:3;
+          background:#0f172a;
+          color:#ffffff;
+          font-weight:900;
+          font-size:10px;
+          padding:1px 6px;
+          border-radius:6px;
+          border:1.5px solid #ffffff;
+          box-shadow:0 2px 6px rgba(0,0,0,0.35);
+          margin-bottom:2px;
+          white-space:nowrap;
+        ">
+          Tuyến ${routeCode}
+        </div>
+
+        <!-- Hình chiếc xe buýt SVG có kính chắn gió, bánh xe & đèn pha -->
+        <div style="
+          z-index:2;
+          width:34px;
+          height:34px;
+          border-radius:50%;
+          background:#ffffff;
+          border:2.5px solid ${color};
+          box-shadow:0 4px 10px rgba(0,0,0,0.35);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+        ">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${angleDeg}deg);">
+            <!-- Thân xe buýt -->
+            <rect x="4" y="3" width="16" height="15" rx="3.5" fill="${color}" />
+            <!-- Kính chắn gió trước -->
+            <rect x="6" y="5" width="12" height="5" rx="1.5" fill="#e0f2fe" />
+            <!-- Đèn pha -->
+            <circle cx="7.5" cy="14.5" r="1.5" fill="#fef08a" />
+            <circle cx="16.5" cy="14.5" r="1.5" fill="#fef08a" />
+            <!-- Lưới tản nhiệt -->
+            <rect x="10" y="14" width="4" height="1.5" rx="0.5" fill="#ffffff" opacity="0.8" />
+            <!-- Bánh xe -->
+            <rect x="6" y="18" width="3" height="3" rx="1" fill="#1e293b" />
+            <rect x="15" y="18" width="3" height="3" rx="1" fill="#1e293b" />
+            <!-- Gương chiếu hậu -->
+            <rect x="2" y="6" width="2" height="3.5" rx="1" fill="${color}" />
+            <rect x="20" y="6" width="2" height="3.5" rx="1" fill="${color}" />
+          </svg>
+        </div>
       </div>
     `,
-    iconSize: [64, 26],
-    iconAnchor: [32, 13],
+    iconSize: [68, 54],
+    iconAnchor: [34, 27],
   });
+};
 
 // Component điều khiển camera bản đồ (Bám theo xe buýt hoặc fit lộ trình)
 function MapCameraController({ followCoords, centerCoords }) {
@@ -924,4 +978,5 @@ export function RouteMap({
   );
 }
 
+export { createMovingBusIcon, CITY_FLEET_ROUTES };
 export default RouteMap;
