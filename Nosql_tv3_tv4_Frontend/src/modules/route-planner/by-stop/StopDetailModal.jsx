@@ -15,6 +15,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import routePlannerService from '../services/routePlannerService.js';
+import simulationService from '../../../services/simulationService.js';
 import { formatCurrency } from '../utils/routeHelpers.js';
 
 const stopDetailIcon = new L.Icon({
@@ -35,7 +36,10 @@ export function StopDetailModal({
 }) {
   const [routesPassing, setRoutesPassing] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [arrivalsLoading, setArrivalsLoading] = useState(false);
   const [liveArrivals, setLiveArrivals] = useState([]);
+  const [simulationStatus, setSimulationStatus] = useState('active');
+  const [lastUpdatedTime, setLastUpdatedTime] = useState(null);
 
   const stopId = stop?.maTram || stop?.ma_tram || stop?.code || stop?.id || stop?._key;
   const stopName = stop?.tenTram || stop?.ten_tram || stop?.name || stopId;
@@ -52,27 +56,9 @@ export function StopDetailModal({
       setLoading(true);
       try {
         const res = await routePlannerService.searchByStop(stopId);
-        if (!mounted) return;
-        const list = res?.routes || [];
-        setRoutesPassing(list);
-
-        // Sinh bảng điện tử mô phỏng thời gian xe sắp tới trạm (Live Arrival Board)
-        const simulated = list.map((r, idx) => {
-          const baseEta = ((idx * 3 + (stopId.charCodeAt(stopId.length - 1) % 5)) % 9) + 1;
-          const plateSuffix = 120 + idx * 37 + (stopId.length * 11);
-          return {
-            routeCode: r.maTuyen,
-            routeName: r.tenTuyen,
-            direction: r.direction === 've' ? 'Lượt về' : 'Lượt đi',
-            color: r.mauSac || '#2563eb',
-            busPlate: `51B-${plateSuffix}.${(idx + 2) * 15}`,
-            etaMinutes: baseEta,
-            stopsAway: Math.max(1, Math.round(baseEta / 2.5)),
-            distanceKm: (baseEta * 0.35).toFixed(1),
-            crowding: idx % 3 === 0 ? 'Thoáng chỗ' : idx % 3 === 1 ? 'Vừa phải' : 'Đông khách',
-          };
-        });
-        setLiveArrivals(simulated.sort((a, b) => a.etaMinutes - b.etaMinutes));
+        if (mounted) {
+          setRoutesPassing(res?.routes || []);
+        }
       } catch (err) {
         console.warn('Error loading stop detail routes:', err.message);
       } finally {
@@ -80,31 +66,41 @@ export function StopDetailModal({
       }
     }
 
+    async function fetchLiveArrivals() {
+      setArrivalsLoading(true);
+      try {
+        const res = await simulationService.getStopArrivals(stopId, { limit: 5 });
+        if (!mounted) return;
+        if (res && res.success) {
+          setLiveArrivals(res.arrivals || []);
+          setSimulationStatus(res.status || 'active');
+          setLastUpdatedTime(new Date());
+        } else {
+          setLiveArrivals([]);
+          setSimulationStatus(res?.status || 'no_active_vehicle');
+        }
+      } catch (err) {
+        console.warn('Error fetching live simulation arrivals:', err.message);
+      } finally {
+        if (mounted) setArrivalsLoading(false);
+      }
+    }
+
     fetchStopRoutes();
+    fetchLiveArrivals();
+
+    // Polling cập nhật mỗi 12 giây từ Simulation Service
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLiveArrivals();
+      }
+    }, 12000);
+
     return () => {
       mounted = false;
+      clearInterval(timer);
     };
   }, [isOpen, stopId]);
-
-  // Hiệu ứng đếm ngược giả lập nhẹ cho bảng điện tử
-  useEffect(() => {
-    if (!isOpen || liveArrivals.length === 0) return;
-    const timer = setInterval(() => {
-      setLiveArrivals((prev) =>
-        prev.map((item) => {
-          const nextDist = Math.max(0.1, Number((Number(item.distanceKm) - 0.05).toFixed(2)));
-          const nextEta = Math.max(0, Math.round(nextDist / 0.35));
-          return {
-            ...item,
-            distanceKm: nextDist.toFixed(1),
-            etaMinutes: nextEta,
-            stopsAway: nextEta === 0 ? 0 : Math.max(1, Math.round(nextEta / 2.5)),
-          };
-        })
-      );
-    }, 6000);
-    return () => clearInterval(timer);
-  }, [isOpen, liveArrivals.length]);
 
   if (!isOpen || !stop) return null;
 
@@ -195,76 +191,106 @@ export function StopDetailModal({
                 <div className="flex items-center gap-2">
                   <Radio size={16} className="text-emerald-400 animate-pulse" />
                   <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    Mô phỏng xe sắp đến trạm (Thời gian đến ước tính)
+                    MÔ PHỎNG – THỜI GIAN ĐẾN ƯỚC TÍNH
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono">Dữ liệu minh họa</span>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                  {lastUpdatedTime && (
+                    <span>Cập nhật: {lastUpdatedTime.toLocaleTimeString('vi-VN')}</span>
+                  )}
+                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-slate-300 border border-slate-700">
+                    Dữ liệu minh họa
+                  </span>
+                </div>
               </div>
 
-              {loading ? (
+              {arrivalsLoading && liveArrivals.length === 0 ? (
                 <div className="py-8 text-center text-xs text-slate-400">
-                  Đang kết nối dữ liệu tuyến từ MongoDB...
+                  Đang tính toán dữ liệu mô phỏng từ vị trí các xe...
                 </div>
               ) : liveArrivals.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  Chưa có chuyến xe nào đang tiến về trạm này.
+                <div className="py-8 text-center text-xs text-slate-400 space-y-1">
+                  <div>
+                    {simulationStatus === 'outside_service_hours'
+                      ? '🌙 Hiện tại ngoài khung giờ hoạt động của xe buýt (05:00 - 20:30).'
+                      : '🚌 Chưa có chuyến xe mô phỏng nào đang tiến về trạm này.'}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Hệ thống tự động đồng bộ theo chu kỳ xuất bến từ backend.
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {liveArrivals.map((bus, i) => (
-                    <div
-                      key={`${bus.routeCode}-${i}`}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-800/80 px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className="flex h-7 w-11 shrink-0 items-center justify-center rounded font-bold text-white text-xs"
-                          style={{ backgroundColor: bus.color }}
-                        >
-                          T{bus.routeCode}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="font-semibold text-white truncate">
-                            {bus.routeName}{' '}
-                            <span className="text-[10px] font-normal text-slate-300">({bus.direction})</span>
-                          </div>
-                          <div className="text-[11px] text-slate-400">
-                            Xe <span className="font-mono text-amber-300">{bus.busPlate}</span> •{' '}
-                            {bus.stopsAway === 0
-                              ? 'Đang mở cửa đón khách tại trạm'
-                              : `Cách ${bus.stopsAway} trạm (~${bus.distanceKm} km)`}{' '}
-                            • {bus.crowding}
+                  {liveArrivals.map((bus, i) => {
+                    const isArrived = bus.etaMinutes === 0 || bus.status === 'at_stop';
+                    const isApproaching = bus.status === 'approaching';
+                    const isScheduled = bus.status === 'scheduled';
+
+                    return (
+                      <div
+                        key={`${bus.vehicleId}-${i}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-800/80 px-3 py-2 text-xs hover:border-slate-700 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className="flex h-7 w-11 shrink-0 items-center justify-center rounded font-bold text-white text-xs"
+                            style={{ backgroundColor: bus.routeColor || '#2563eb' }}
+                          >
+                            T{bus.routeCode}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-white truncate">
+                              {bus.routeName}{' '}
+                              <span className="text-[10px] font-normal text-slate-300">
+                                ({bus.directionLabel || (bus.direction === 'luot_di' ? 'Chiều đi' : 'Chiều về')})
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              Mã xe: <span className="font-mono text-amber-300 font-bold">{bus.vehicleId}</span> •{' '}
+                              {isArrived
+                                ? 'Đang đón khách tại trạm'
+                                : isScheduled
+                                ? 'Chưa xuất bến đầu tuyến'
+                                : `Cách ${bus.stopsAway} trạm`}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="shrink-0 text-right">
-                        {bus.etaMinutes === 0 ? (
-                          <span className="inline-block rounded bg-emerald-500/20 border border-emerald-400 px-2 py-0.5 text-[11px] font-bold text-emerald-300 animate-pulse">
-                            Đã tới trạm
-                          </span>
-                        ) : (
-                          <div>
-                            <span className="text-sm font-extrabold text-amber-400 tabular-nums">
-                              ~{bus.etaMinutes} phút
+                        <div className="shrink-0 text-right">
+                          {isArrived ? (
+                            <span className="inline-block rounded bg-emerald-500/20 border border-emerald-400 px-2 py-0.5 text-[11px] font-bold text-emerald-300 animate-pulse">
+                              🟢 Đã tới trạm
                             </span>
-                            <div className="text-[10px] text-slate-400">sắp tới</div>
-                          </div>
-                        )}
+                          ) : (
+                            <div>
+                              <span
+                                className={`text-sm font-extrabold tabular-nums ${
+                                  isApproaching ? 'text-amber-400' : 'text-blue-400'
+                                }`}
+                              >
+                                ~{bus.etaMinutes} phút
+                              </span>
+                              <div className="text-[10px] text-slate-400">
+                                {isApproaching ? '🟡 Sắp cập bến' : isScheduled ? 'Chờ xuất bến' : 'sắp tới'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
-                * Lưu ý: Biển số xe, thời gian đến và mức độ đông khách mang tính chất mô phỏng minh họa trải nghiệm người dùng, không phải định vị GPS thời gian thực từ phương tiện vận hành.
+                * Dữ liệu thời gian xe đến mang tính chất MÔ PHỎNG MINH HỌA trải nghiệm theo lịch trình và quan hệ đồ thị KE_TIEP, không phải dữ liệu GPS thực tế từ xe buýt.
               </p>
             </div>
 
             {/* Stop Location Mini Map (5 cols) */}
             <div className="lg:col-span-5 rounded-xl border border-slate-200 overflow-hidden h-64 relative z-0">
               <MapContainer
+                key={`stop-mini-map-${stopId || 'default'}`}
                 center={[lat, lng]}
                 zoom={15}
                 scrollWheelZoom={false}

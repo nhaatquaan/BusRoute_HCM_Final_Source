@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bus, Navigation, Network, Map as MapIcon, Search, Database, Layers, Scale, BarChart3 } from 'lucide-react';
 import { useRoutePlanner } from './hooks/useRoutePlanner.js';
 import { RouteSearch } from './search/RouteSearch.jsx';
@@ -76,6 +76,39 @@ export function RoutePlannerModule({
       ) || stopObj;
     setInspectingStop(fullStop);
   };
+
+  // Hỗ trợ mở chi tiết trạm dừng qua URL (?stop=TR_01)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlStop = params.get('stop');
+      if (urlStop) {
+        if (stopsList && stopsList.length > 0) {
+          const found = stopsList.find(
+            (s) =>
+              s.maTram === urlStop ||
+              s.ma_tram === urlStop ||
+              s.code === urlStop ||
+              s.id === urlStop ||
+              s._key === urlStop
+          );
+          if (found) {
+            setInspectingStop(found);
+            return;
+          }
+        }
+        // Fallback mở ngay nếu đang tải trạm
+        setInspectingStop({
+          ma_tram: urlStop,
+          maTram: urlStop,
+          ten_tram: urlStop === 'TR_01' ? 'Bến xe buýt Sài Gòn (Bến Thành)' : `Trạm ${urlStop}`,
+          tenTram: urlStop === 'TR_01' ? 'Bến xe buýt Sài Gòn (Bến Thành)' : `Trạm ${urlStop}`,
+          latitude: 10.76895,
+          longitude: 106.69348,
+        });
+      }
+    } catch (_) {}
+  }, [stopsList]);
 
   // Khi người dùng click trực tiếp một điểm trên Bản đồ làm Điểm đi hoặc Điểm đến (giống Google Maps)
   const handleMapPinSelection = (pinData, isOrigin = true) => {

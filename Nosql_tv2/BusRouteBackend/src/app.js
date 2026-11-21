@@ -8,6 +8,7 @@ const databaseRoutes = require("./routes/databaseRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const passengerRoutes = require("./routes/passengerRoutes");
+const simulationRoutes = require("./routes/simulationRoutes");
 const { routePlannerRouter } = require("./modules/route-planner/routePlanner.routes");
 
 const app = express();
@@ -47,6 +48,9 @@ app.use("/api/analytics", analyticsRoutes);
 
 // 7. API Trợ lý AI (Ollama Local)
 app.use("/api/ai", aiRoutes);
+
+// 8. API Mô phỏng xe buýt đang vận hành (BusRoute Live Simulation)
+app.use("/api/simulation", simulationRoutes);
 
 // API kiểm tra server
 app.get("/", (req, res) => {

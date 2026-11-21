@@ -17,6 +17,7 @@ import { StopList } from './StopList.jsx';
 import { formatDistance, formatDuration, formatCurrency, printRouteDocument } from '../utils/routeHelpers.js';
 import { authService } from '../../../services/authService';
 import { passengerService } from '../../../services/passengerService';
+import { simulationService } from '../../../services/simulationService';
 
 export function RouteCard({
   path,
@@ -30,56 +31,47 @@ export function RouteCard({
   const [favoriteRouteCodes, setFavoriteRouteCodes] = useState(new Set());
   const [favLoading, setFavLoading] = useState(false);
 
-  // Mô phỏng vị trí xe buýt đang tới trạm xuất phát (Live ETA Simulation)
+  // Tích hợp dữ liệu xe buýt mô phỏng đang tới trạm xuất phát (Bus Simulation Service)
   const primaryRouteCode = path?.routes?.[0] || '01';
-  const startStopName = path?.stops?.[0]?.name || 'Trạm xuất phát';
-  const secondStopName = path?.stops?.[1]?.name || 'Trạm kế tiếp';
+  const startStop = path?.stops?.[0];
+  const startStopId = startStop?.id || startStop?.maTram || startStop?._key || startStop?._id;
+  const startStopName = startStop?.name || 'Trạm xuất phát';
+  const primaryDirection = path?.segments?.[0]?.direction || 'luot_di';
 
-  const initialBusSim = useMemo(() => {
-    const seed = (primaryRouteCode.charCodeAt(0) || 1) + (path?.pathIndex || 1) * 3;
-    const stopsAway = (seed % 3) + 1; // Cách 1 - 3 trạm
-    const distanceKm = Number((stopsAway * 0.65).toFixed(1));
-    const etaMinutes = Math.max(1, Math.round(distanceKm * 2.4));
-    const plateNum = `51B-${140 + (seed % 70)}.${20 + (seed % 65)}`;
-    return {
-      busPlate: plateNum,
-      stopsAway,
-      distanceKm,
-      etaMinutes,
-      currentLocationDesc:
-        stopsAway === 1
-          ? `Vừa rời trạm trước, đang tiến thẳng về ${startStopName}`
-          : `Đang trên đường tiến về ${startStopName} (hướng đi ${secondStopName})`,
-    };
-  }, [primaryRouteCode, path?.pathIndex, startStopName, secondStopName]);
-
-  const [busSim, setBusSim] = useState(initialBusSim);
+  const [liveWaitInfo, setLiveWaitInfo] = useState(null);
+  const [waitLoading, setWaitLoading] = useState(false);
 
   useEffect(() => {
-    setBusSim(initialBusSim);
-  }, [initialBusSim]);
+    if (!startStopId || !primaryRouteCode) return;
+    let mounted = true;
 
-  // Cập nhật mô phỏng xe tiến lại gần trạm đón theo thời gian thực
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setBusSim((prev) => {
-        if (prev.etaMinutes <= 0) {
-          // Reset sang chuyến xe kế tiếp sau khi xe đã tới trạm
-          return initialBusSim;
+    async function fetchWait() {
+      try {
+        setWaitLoading(true);
+        const wait = await simulationService.getRouteWait(primaryRouteCode, primaryDirection, startStopId);
+        if (mounted) {
+          setLiveWaitInfo(wait);
         }
-        const nextDist = Math.max(0, Number((prev.distanceKm - 0.15).toFixed(2)));
-        const nextEta = nextDist <= 0.1 ? 0 : Math.max(1, Math.round(nextDist * 2.4));
-        const nextStopsAway = nextEta === 0 ? 0 : Math.max(1, Math.ceil(nextDist / 0.65));
-        return {
-          ...prev,
-          distanceKm: Number(nextDist.toFixed(1)),
-          etaMinutes: nextEta,
-          stopsAway: nextStopsAway,
-        };
-      });
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [initialBusSim]);
+      } catch (err) {
+        console.warn('Error fetching route wait info:', err.message);
+      } finally {
+        if (mounted) setWaitLoading(false);
+      }
+    }
+
+    fetchWait();
+
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchWait();
+      }
+    }, 15000);
+
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [primaryRouteCode, primaryDirection, startStopId]);
 
   const handlePrintThisPath = (e) => {
     e.stopPropagation();
@@ -254,58 +246,143 @@ export function RouteCard({
           )}
         </div>
 
-        {/* LIVE BUS SIMULATION & ETA BAR (Mô phỏng vị trí xe buýt đang tới trạm bắt đầu) */}
-        <div
-          style={{
-            marginTop: '10px',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            background: busSim.etaMinutes === 0 ? '#ecfdf5' : '#f0f9ff',
-            border: busSim.etaMinutes === 0 ? '1px solid #6ee7b7' : '1px solid #bae6fd',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px',
-            fontSize: '0.78rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: busSim.etaMinutes === 0 ? '#059669' : '#0284c7',
-                color: '#ffffff',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-              }}
-            >
-              <Radio size={12} />
-              <span>LIVE MÔ PHỎNG</span>
-            </span>
-            <span>
-              🚌 <strong>Tuyến {primaryRouteCode}</strong> (Xe <code style={{ fontWeight: 700 }}>{busSim.busPlate}</code>):{' '}
-              {busSim.etaMinutes === 0 ? (
-                <strong style={{ color: '#059669' }}>Xe đã cập bến tại {startStopName} — Sẵn sàng đón khách!</strong>
-              ) : (
-                <>
-                  Đang cách trạm đón <strong>{startStopName}</strong> khoảng{' '}
-                  <strong>
-                    {busSim.stopsAway} trạm (~{busSim.distanceKm} km)
-                  </strong>
-                </>
-              )}
-            </span>
-          </div>
+        {/* LIVE BUS SIMULATION & WAIT TIME BAR (Tích hợp Bus Simulation Service thống nhất) */}
+        {(() => {
+          const isArrived = liveWaitInfo && (liveWaitInfo.etaMinutes === 0 || liveWaitInfo.status === 'at_stop');
+          const isScheduled = liveWaitInfo && liveWaitInfo.status === 'scheduled';
+          const walkMin = originWalkInfo?.walkMinutes || 0;
+          const destWalkMin = destWalkInfo?.walkMinutes || 0;
+          const busMin = path.totalDuration || 0;
+          const waitMin = liveWaitInfo ? liveWaitInfo.etaMinutes : null;
 
-          <div style={{ fontWeight: 800, color: busSim.etaMinutes === 0 ? '#059669' : '#0369a1' }}>
-            {busSim.etaMinutes === 0 ? '🟢 Đang đón khách' : `⏱️ Dự kiến tới trạm sau ~${busSim.etaMinutes} phút`}
-          </div>
-        </div>
+          return (
+            <>
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  background: isArrived ? '#ecfdf5' : '#f0f9ff',
+                  border: isArrived ? '1px solid #6ee7b7' : '1px solid #bae6fd',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  fontSize: '0.78rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: isArrived ? '#059669' : '#0284c7',
+                      color: '#ffffff',
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <Radio size={12} />
+                    <span>MÔ PHỎNG – THỜI GIAN ĐẾN ƯỚC TÍNH</span>
+                  </span>
+                  <span>
+                    🚌 <strong>Tuyến {primaryRouteCode}</strong>
+                    {liveWaitInfo?.vehicleId && (
+                      <> (Mã xe <code style={{ fontWeight: 700 }}>{liveWaitInfo.vehicleId}</code>)</>
+                    )}
+                    :{' '}
+                    {waitLoading && !liveWaitInfo ? (
+                      <span style={{ color: '#64748b' }}>Đang tra cứu xe mô phỏng tới trạm...</span>
+                    ) : isArrived ? (
+                      <strong style={{ color: '#059669' }}>
+                        Xe đã cập bến tại {startStopName} — Sẵn sàng lên xe!
+                      </strong>
+                    ) : isScheduled ? (
+                      <>
+                        Chưa xuất bến đầu tuyến, dự kiến tới trạm đón <strong>{startStopName}</strong> sau{' '}
+                        <strong>~{liveWaitInfo?.etaMinutes} phút</strong>
+                      </>
+                    ) : liveWaitInfo ? (
+                      <>
+                        Đang cách trạm đón <strong>{startStopName}</strong> khoảng{' '}
+                        <strong>{liveWaitInfo.stopsAway} trạm</strong>
+                      </>
+                    ) : (
+                      <span style={{ color: '#64748b' }}>
+                        Chưa có xe mô phỏng trên tuyến này trong khung giờ hiện tại.
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                <div style={{ fontWeight: 800, color: isArrived ? '#059669' : '#0369a1' }}>
+                  {isArrived
+                    ? '🟢 Sẵn sàng lên xe'
+                    : liveWaitInfo?.etaMinutes !== undefined
+                    ? `⏱️ Chờ xe: ~${liveWaitInfo.etaMinutes} phút`
+                    : 'Chờ: Chưa cập nhật'}
+                </div>
+              </div>
+
+              {/* Detailed Timeline Breakdown (Đi bộ + Chờ xe + Đi xe buýt = Tổng thời gian) */}
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '0.75rem',
+                  color: '#334155',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ fontWeight: 700, color: '#0f172a' }}>Hành trình dự kiến:</span>
+                {walkMin > 0 && (
+                  <>
+                    <span>🚶 Đi bộ: <strong>{walkMin}p</strong></span>
+                    <span style={{ color: '#94a3b8' }}>+</span>
+                  </>
+                )}
+                <span>
+                  ⏱️ Chờ xe mô phỏng:{' '}
+                  <strong>
+                    {waitMin !== null ? `${waitMin}p` : 'Đang tính'}
+                  </strong>
+                </span>
+                <span style={{ color: '#94a3b8' }}>+</span>
+                <span>🚌 Đi xe buýt: <strong>~{busMin}p</strong></span>
+                {destWalkMin > 0 && (
+                  <>
+                    <span style={{ color: '#94a3b8' }}>+</span>
+                    <span>🏁 Đi bộ đích: <strong>{destWalkMin}p</strong></span>
+                  </>
+                )}
+                <span style={{ color: '#94a3b8' }}>=</span>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    color: '#0284c7',
+                    background: '#e0f2fe',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  {waitMin !== null
+                    ? `Tổng dự kiến: ~${walkMin + waitMin + busMin + destWalkMin} phút`
+                    : `Tổng di chuyển: ~${walkMin + busMin + destWalkMin} phút`}
+                </span>
+              </div>
+            </>
+          );
+        })()}
 
         {/* Walking guidance if user searched from a custom location */}
         {(originWalkInfo || destWalkInfo) && (

@@ -143,6 +143,21 @@ export function useRoutePlanner({
     }
   }, [initialFrom, initialTo, autoSearchTrigger]);
 
+  // Hỗ trợ tự động tra cứu từ URL Query Parameters (?from=TR_01&to=TR_08)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlFrom = params.get('from');
+      const urlTo = params.get('to');
+      if (urlFrom && urlTo) {
+        setActiveTab('path-finder');
+        setFromStop(urlFrom);
+        setToStop(urlTo);
+        searchRoute(urlFrom, urlTo, criteria);
+      }
+    } catch (_) {}
+  }, [searchRoute, criteria]);
+
   // Execute Search By Stop
   const searchRoutesByStop = useCallback(async (stopId) => {
     const id = stopId || byStopSelected;

@@ -67,7 +67,39 @@
   }
 }
 
-.live-moving-bus-marker {
+.live-moving-bus-marker,
+.custom-bus-div-icon {
   background: transparent !important;
   border: none !important;
+}
+
+.live-bus-marker {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.live-bus-marker:hover,
+.live-bus-marker.is-focused {
+  transform: translate(-50%, -50%) scale(1.15) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  z-index: 9999 !important;
+}
+
+.live-bus-approaching {
+  animation: busApproachingPulse 1.8s infinite ease-in-out;
+}
+
+.live-bus-at-stop {
+  border-color: #22c55e !important;
+}
+
+@keyframes busApproachingPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
 }

@@ -10,6 +10,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { LiveBusLayer } from './LiveBusLayer.jsx';
 import {
   findNearestStopsFromCoords,
   formatDistance,
@@ -53,6 +54,7 @@ export function RouteMap({
 }) {
   const [clickedPin, setClickedPin] = useState(null);
   const [osrmRoadWaypoints, setOsrmRoadWaypoints] = useState(null);
+  const [showLiveBuses, setShowLiveBuses] = useState(true);
 
   // Chuẩn hóa toàn bộ danh sách trạm có tọa độ hợp lệ
   const validAllStops = useMemo(() => {
@@ -182,11 +184,37 @@ export function RouteMap({
           </p>
         </div>
 
-        <span className="graph-source-badge arango">
-          {hasActivePath
-            ? `Lộ trình qua ${pathStopsWithCoords.length} bến dừng`
-            : `${validAllStops.length} bến xe buýt trên bản đồ`}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="live-bus-toggle-btn"
+            onClick={() => setShowLiveBuses(!showLiveBuses)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: showLiveBuses ? '1px solid #16a34a' : '1px solid #cbd5e1',
+              background: showLiveBuses ? '#ecfdf5' : '#f8fafc',
+              color: showLiveBuses ? '#15803d' : '#64748b',
+              transition: 'all 0.2s',
+            }}
+            title="Bật/tắt lớp hiển thị xe buýt mô phỏng đang chạy trên bản đồ"
+          >
+            <span>{showLiveBuses ? '🟢' : '⚪'}</span>
+            <span>Xe buýt trực tuyến ({showLiveBuses ? 'BẬT' : 'TẮT'})</span>
+          </button>
+
+          <span className="graph-source-badge arango">
+            {hasActivePath
+              ? `Lộ trình qua ${pathStopsWithCoords.length} bến dừng`
+              : `${validAllStops.length} bến xe buýt trên bản đồ`}
+          </span>
+        </div>
       </div>
 
       {/* Khung Bản đồ Leaflet tương tác */}
@@ -206,6 +234,9 @@ export function RouteMap({
           <MapCameraController
             centerCoords={hasActivePath ? [centerLat, centerLng] : null}
           />
+
+          {/* Lớp hiển thị xe buýt mô phỏng đang vận hành */}
+          <LiveBusLayer enabled={showLiveBuses} />
 
           {/* 1. Vẽ toàn bộ 25 bến xe buýt trên bản đồ */}
           {validAllStops.map((stop) => {
