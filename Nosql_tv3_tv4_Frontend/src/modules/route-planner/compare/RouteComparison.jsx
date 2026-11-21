@@ -16,11 +16,14 @@ import { formatCurrency, printRouteDocument } from '../utils/routeHelpers.js';
 
 export function RouteComparison({ onInspectStop }) {
   const [routesList, setRoutesList] = useState([]);
+  const [direction, setDirection] = useState('luot_di');
   const [routeAId, setRouteAId] = useState('TX_01');
   const [routeBId, setRouteBId] = useState('TX_19');
   const [detailA, setDetailA] = useState(null);
   const [detailB, setDetailB] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
   useEffect(() => {
     async function loadAllRoutes() {
@@ -45,14 +48,23 @@ export function RouteComparison({ onInspectStop }) {
     async function fetchDetails() {
       if (!routeAId || !routeBId) return;
       setLoading(true);
+      setFetchError('');
       try {
+        // Tải chính xác dữ liệu của chiều đã chọn (không dùng fallback âm thầm sang lượt đi khi lượt về lỗi)
         const [a, b] = await Promise.all([
-          routeService.getById(routeAId).catch(() => null),
-          routeService.getById(routeBId).catch(() => null),
+          routeService.getById(routeAId, direction),
+          routeService.getById(routeBId, direction),
         ]);
         if (!mounted) return;
         setDetailA(a);
         setDetailB(b);
+      } catch (err) {
+        if (!mounted) return;
+        setDetailA(null);
+        setDetailB(null);
+        setFetchError(
+          `Không thể tải dữ liệu chiều "${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}": ${err.message || 'Lỗi kết nối'}`
+        );
       } finally {
         if (mounted) setLoading(false);
       }
@@ -61,7 +73,7 @@ export function RouteComparison({ onInspectStop }) {
     return () => {
       mounted = false;
     };
-  }, [routeAId, routeBId]);
+  }, [routeAId, routeBId, direction, retryTrigger]);
 
   // Tìm các trạm giao nhau (Trạm trung chuyển chung giữa Tuyến A và Tuyến B)
   const sharedStops = useMemo(() => {
@@ -72,34 +84,86 @@ export function RouteComparison({ onInspectStop }) {
   }, [detailA, detailB]);
 
   const calcTotalDuration = (routeDetail) => {
-    const stops = routeDetail?.stops || [];
-    if (stops.length <= 1) return (stops.length || 10) * 4;
-    return stops.reduce((sum, s, i) => sum + (i === 0 ? 0 : Number(s.thoi_gian_di_chuyen_phut || 5)), 0);
+    const stops = routeDetail?.stops;
+    if (!Array.isArray(stops) || stops.length <= 1) {
+      return null;
+    }
+
+    let total = 0;
+    let validEdgeCount = 0;
+    const totalEdges = stops.length - 1;
+
+    // Trong MongoDB và Backend API, thoi_gian_di_chuyen_phut tại stops[i]
+    // biểu diễn thời gian của cạnh KE_TIEP đi từ stops[i] đến stops[i + 1].
+    // Tuyến có N trạm sẽ có N - 1 cạnh (chỉ duyệt từ phần tử 0 đến length - 2).
+    // Phần tử cuối cùng (length - 1) không có chặng kế tiếp nên không cộng dồn.
+    for (let i = 0; i < totalEdges; i++) {
+      const edgeTime = stops[i]?.thoi_gian_di_chuyen_phut ?? stops[i]?.thoi_gian_den_tram_tiep_theo;
+      if (
+        edgeTime !== undefined &&
+        edgeTime !== null &&
+        !isNaN(Number(edgeTime)) &&
+        Number(edgeTime) >= 0
+      ) {
+        total += Number(edgeTime);
+        validEdgeCount++;
+      }
+    }
+
+    if (validEdgeCount === 0) {
+      return null;
+    }
+
+    return {
+      totalMinutes: total,
+      isEstimate: validEdgeCount < totalEdges,
+      validEdges: validEdgeCount,
+      totalEdges,
+    };
   };
 
   const handlePrintRoute = (detail) => {
     if (!detail) return;
     const code = detail.code || detail.ma_tuyen || detail.maTuyen;
     const name = detail.name || detail.ten_tuyen || detail.tenTuyen;
+    const rawFare = detail.gia_ve ?? detail.ticketPrice ?? detail.giaVe;
+    const rawDist = detail.cu_ly_km ?? (detail.cuLy ? parseFloat(detail.cuLy) : null);
+    const fareStr = rawFare !== undefined && rawFare !== null && !isNaN(Number(rawFare)) ? formatCurrency(Number(rawFare)) : 'Chưa cập nhật';
+    const distStr = rawDist !== undefined && rawDist !== null && !isNaN(Number(rawDist)) ? `${rawDist} km` : 'Chưa cập nhật';
+    const durInfo = calcTotalDuration(detail);
+    const durStr = durInfo
+      ? (durInfo.isEstimate
+          ? `${durInfo.totalMinutes} phút dữ liệu đã có (thiếu ${durInfo.totalEdges - durInfo.validEdges}/${durInfo.totalEdges} chặng – chưa đủ tính toàn tuyến)`
+          : `~${durInfo.totalMinutes} phút (toàn trình ${durInfo.totalEdges}/${durInfo.totalEdges} cạnh KE_TIEP)`)
+      : 'Chưa cập nhật';
     printRouteDocument({
       title: `THÔNG TIN LỘ TRÌNH TUYẾN XE BUÝT SỐ ${code}`,
       subtitle: `${name} (${detail.startPoint || detail.diem_dau || ''} ➔ ${detail.endPoint || detail.diem_cuoi || ''})`,
       stops: detail.stops || [],
       metaList: [
         { label: 'Mã tuyến xe', value: `Tuyến ${code}` },
-        { label: 'Giá vé lượt', value: formatCurrency(detail.ticketPrice || detail.gia_ve || 6000) },
+        { label: 'Chiều so sánh', value: direction === 'luot_di' ? 'Lượt đi' : 'Lượt về' },
+        { label: 'Giá vé lượt', value: fareStr },
+        { label: 'Thời gian toàn trình', value: durStr },
         { label: 'Giờ hoạt động', value: detail.operatingHours || detail.thoiGianHoatDong || '05:00 - 20:30' },
-        { label: 'Tổng cự ly & số trạm', value: `${detail.cu_ly_km || 15} km (${(detail.stops || []).length} trạm)` },
+        { label: 'Tổng cự ly & số trạm', value: `${distStr} (${(detail.stops || []).length} trạm)` },
       ],
     });
   };
 
   const durA = calcTotalDuration(detailA);
   const durB = calcTotalDuration(detailB);
-  const fareA = Number(detailA?.ticketPrice ?? detailA?.gia_ve ?? 6000);
-  const fareB = Number(detailB?.ticketPrice ?? detailB?.gia_ve ?? 6000);
-  const distA = Number(detailA?.cu_ly_km ?? parseFloat(detailA?.cuLy) ?? 15);
-  const distB = Number(detailB?.cu_ly_km ?? parseFloat(detailB?.cuLy) ?? 15);
+
+  const rawFareA = detailA?.gia_ve ?? detailA?.ticketPrice ?? detailA?.giaVe;
+  const rawFareB = detailB?.gia_ve ?? detailB?.ticketPrice ?? detailB?.giaVe;
+  const fareA = rawFareA !== undefined && rawFareA !== null && !isNaN(Number(rawFareA)) ? Number(rawFareA) : null;
+  const fareB = rawFareB !== undefined && rawFareB !== null && !isNaN(Number(rawFareB)) ? Number(rawFareB) : null;
+
+  const rawDistA = detailA?.cu_ly_km ?? (detailA?.cuLy ? parseFloat(detailA.cuLy) : null);
+  const rawDistB = detailB?.cu_ly_km ?? (detailB?.cuLy ? parseFloat(detailB.cuLy) : null);
+  const distA = rawDistA !== undefined && rawDistA !== null && !isNaN(Number(rawDistA)) ? Number(rawDistA) : null;
+  const distB = rawDistB !== undefined && rawDistB !== null && !isNaN(Number(rawDistB)) ? Number(rawDistB) : null;
+
   const stopsCountA = detailA?.stops?.length || 0;
   const stopsCountB = detailB?.stops?.length || 0;
 
@@ -117,17 +181,43 @@ export function RouteComparison({ onInspectStop }) {
               Đặt 2 tuyến xe lên bàn cân về giá vé, cự ly, số trạm dừng, thời gian toàn trình và tự động tìm các Trạm Trung chuyển giao nhau
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              const temp = routeAId;
-              setRouteAId(routeBId);
-              setRouteBId(temp);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-          >
-            <ArrowLeftRight size={14} /> Đổi bên so sánh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setDirection('luot_di')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors ${
+                  direction === 'luot_di'
+                    ? 'bg-white text-[#245A85] shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Lượt đi
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirection('luot_ve')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer transition-colors ${
+                  direction === 'luot_ve'
+                    ? 'bg-white text-[#245A85] shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Lượt về
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const temp = routeAId;
+                setRouteAId(routeBId);
+                setRouteBId(temp);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              <ArrowLeftRight size={14} /> Đổi bên so sánh
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,6 +309,22 @@ export function RouteComparison({ onInspectStop }) {
         )}
       </div>
 
+      {/* Error Alert with Retry button (nếu có lỗi tải dữ liệu của chiều đã chọn) */}
+      {fetchError && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-xs text-xs flex flex-wrap items-center justify-between gap-3 text-rose-800">
+          <div>
+            <strong className="font-bold text-rose-900">Không thể tải dữ liệu:</strong> {fetchError}
+          </div>
+          <button
+            type="button"
+            onClick={() => setRetryTrigger((k) => k + 1)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-700 transition-colors cursor-pointer"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      )}
+
       {/* Side-by-side Comparison Table & Stops Sequence */}
       {loading ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-xs text-slate-500">
@@ -234,8 +340,14 @@ export function RouteComparison({ onInspectStop }) {
             if (!d) return null;
             const code = d.code || d.ma_tuyen;
             const name = d.name || d.ten_tuyen;
-            const isCheaper = col.fare < col.otherFare;
-            const isFaster = col.dur < col.otherDur;
+            const isCheaper = col.fare !== null && col.otherFare !== null && col.fare < col.otherFare;
+            // Chỉ so sánh nhanh/chậm khi CẢ HAI tuyến đều có đầy đủ dữ liệu (không so sánh nếu một trong hai đang ước tính / thiếu chặng)
+            const isFaster =
+              col.dur &&
+              col.otherDur &&
+              !col.dur.isEstimate &&
+              !col.otherDur.isEstimate &&
+              col.dur.totalMinutes < col.otherDur.totalMinutes;
 
             return (
               <div
@@ -271,7 +383,7 @@ export function RouteComparison({ onInspectStop }) {
                   <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5">
                     <div className="text-[10px] text-slate-400 font-semibold uppercase">Giá vé lượt</div>
                     <div className="mt-1 font-extrabold text-sm text-[#172B4D] flex items-center gap-1">
-                      <span>{formatCurrency(col.fare)}</span>
+                      <span>{col.fare !== null ? formatCurrency(col.fare) : 'Chưa cập nhật'}</span>
                     </div>
                     {isCheaper && (
                       <span className="text-[10px] font-bold text-emerald-600">✓ Rẻ hơn</span>
@@ -280,7 +392,9 @@ export function RouteComparison({ onInspectStop }) {
 
                   <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5">
                     <div className="text-[10px] text-slate-400 font-semibold uppercase">Cự ly tuyến</div>
-                    <div className="mt-1 font-extrabold text-sm text-[#172B4D]">{col.dist} km</div>
+                    <div className="mt-1 font-extrabold text-sm text-[#172B4D]">
+                      {col.dist !== null ? `${col.dist} km` : 'Chưa cập nhật'}
+                    </div>
                     <span className="text-[10px] text-slate-400">Toàn lộ trình</span>
                   </div>
 
@@ -292,9 +406,34 @@ export function RouteComparison({ onInspectStop }) {
 
                   <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-2.5">
                     <div className="text-[10px] text-slate-400 font-semibold uppercase">TG toàn trình</div>
-                    <div className="mt-1 font-extrabold text-sm text-[#172B4D]">~{col.dur} phút</div>
+                    {col.dur ? (
+                      col.dur.isEstimate ? (
+                        <>
+                          <div className="mt-1 font-extrabold text-sm text-amber-700">
+                            {col.dur.totalMinutes} phút <span className="text-[10px] font-semibold text-amber-600">(dữ liệu đã có)</span>
+                          </div>
+                          <span className="text-[10px] text-amber-600 block mt-0.5 font-medium leading-tight">
+                            Thiếu {col.dur.totalEdges - col.dur.validEdges}/{col.dur.totalEdges} chặng – Chưa đủ tính toàn tuyến
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mt-1 font-extrabold text-sm text-[#172B4D]">
+                            ~{col.dur.totalMinutes} phút
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            Tổng thời gian ({col.dur.totalEdges}/{col.dur.totalEdges} cạnh KE_TIEP)
+                          </span>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <div className="mt-1 font-extrabold text-sm text-slate-400">Chưa cập nhật</div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">Chưa đủ dữ liệu chặng</span>
+                      </>
+                    )}
                     {isFaster && (
-                      <span className="text-[10px] font-bold text-emerald-600">✓ Nhanh hơn</span>
+                      <span className="text-[10px] font-bold text-emerald-600 block mt-1">✓ Nhanh hơn</span>
                     )}
                   </div>
                 </div>

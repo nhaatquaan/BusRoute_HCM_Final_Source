@@ -9,9 +9,23 @@ const getAllStops = async () => {
     return await stopCollection.find({}).sort({ ma_tram: 1 }).toArray();
 };
 
-// 2. Lấy trạm theo ID (_key hoặc _id)
+// 2. Lấy trạm theo ID (_key, _id hoặc mã trạm)
 const getStopById = async (stopId) => {
-    return await stopCollection.findOne(buildIdFilter("TramDung", stopId));
+    if (!stopId) return null;
+    const clean = String(stopId).trim();
+    const key = clean.includes("/") ? clean.split("/")[1] : clean;
+    const trKey = key.startsWith("TR_") ? key : `TR_${key}`;
+    return await stopCollection.findOne({
+        $or: [
+            { _key: key },
+            { _id: `TramDung/${key}` },
+            { _id: clean },
+            { _key: trKey },
+            { _id: `TramDung/${trKey}` },
+            { ma_tram: clean },
+            { ma_tram: key }
+        ]
+    });
 };
 
 // 3. Thêm trạm dừng

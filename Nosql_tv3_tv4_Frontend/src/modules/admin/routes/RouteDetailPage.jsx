@@ -58,13 +58,37 @@ export default function RouteDetailPage() {
         routeService.getById(id, targetDirection),
         stopService.getAll(),
       ]);
-      setRoute(routeData);
+
+      const flatRoute = routeData?.tuyen_xe ? { ...routeData.tuyen_xe, ...routeData } : routeData;
+      setRoute(flatRoute);
       setAllStops(stopsData);
-      const stopsList = (routeData.stops || []).map((s, idx) => ({
-        ...s,
-        khoang_cach_km: s.khoang_cach_km ?? s.distance ?? (idx === 0 ? 0 : 1.5),
-        thoi_gian_di_chuyen_phut: s.thoi_gian_di_chuyen_phut ?? s.duration ?? (idx === 0 ? 0 : 5),
-      }));
+
+      let stopsSource = flatRoute?.stops;
+      if (!stopsSource && Array.isArray(flatRoute?.danh_sach_tram)) {
+        stopsSource = flatRoute.danh_sach_tram.map((item, idx) => ({
+          ...(item.tram || item),
+          id: item.tram?.id || item.tram?._key || item.tram?._id || item.id || item._key || item._id,
+          order: item.thu_tu || idx + 1,
+          thu_tu: item.thu_tu || idx + 1,
+          khoang_cach_km: idx === 0 ? 0 : (item.khoang_cach_den_tram_tiep_theo ?? null),
+          thoi_gian_di_chuyen_phut: idx === 0 ? 0 : (item.thoi_gian_den_tram_tiep_theo ?? null)
+        }));
+      }
+
+      const stopsList = (stopsSource || []).map((s, idx) => {
+        const rawDist = s.khoang_cach_km ?? s.khoang_cach_den_tram_tiep_theo ?? s.distance;
+        const rawDur = s.thoi_gian_di_chuyen_phut ?? s.thoi_gian_den_tram_tiep_theo ?? s.duration;
+        const hasDist = rawDist !== undefined && rawDist !== null && !isNaN(Number(rawDist));
+        const hasDur = rawDur !== undefined && rawDur !== null && !isNaN(Number(rawDur));
+        return {
+          ...s,
+          id: s.id || s._key || s._id || s.code,
+          order: s.thu_tu || s.order || idx + 1,
+          thu_tu: s.thu_tu || s.order || idx + 1,
+          khoang_cach_km: idx === 0 ? 0 : (hasDist ? Number(rawDist) : null),
+          thoi_gian_di_chuyen_phut: idx === 0 ? 0 : (hasDur ? Number(rawDur) : null),
+        };
+      });
       setOrderedStops(stopsList);
       setInitialOrder(stopsList);
       setDirty(false);
@@ -150,7 +174,9 @@ export default function RouteDetailPage() {
   const updateStopMetric = (index, field, value) => {
     setOrderedStops((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], [field]: Number(value) };
+      const valStr = value === null || value === undefined ? '' : String(value).trim();
+      const num = valStr === '' ? null : Number(valStr);
+      next[index] = { ...next[index], [field]: isNaN(num) ? null : num };
       return next;
     });
     setDirty(true);
@@ -178,13 +204,38 @@ export default function RouteDetailPage() {
   };
 
   const handleSaveOrder = async () => {
-    if (!window.confirm(`Bạn có chắc chắn muốn lưu lộ trình "${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}" vào MongoDB?`)) {
-      return;
+    // Kiểm tra xem có trạm nào (từ trạm thứ 2 trở đi) chưa có khoảng cách hoặc thời gian không
+    const missingItems = orderedStops.slice(1).filter(
+      (s) => s.thoi_gian_di_chuyen_phut === null || s.khoang_cach_km === null
+    );
+
+    let stopsToSave = orderedStops;
+
+    if (missingItems.length > 0) {
+      const confirmFill = window.confirm(
+        `Lộ trình có ${missingItems.length} trạm chưa được xác nhận thời gian di chuyển hoặc cự ly.\n\n` +
+        `Bạn có muốn áp dụng giá trị gợi ý mặc định (1.5 km và 5 phút) cho các trạm còn thiếu để lưu vào MongoDB không?\n\n` +
+        `- Nhấn OK: Đồng ý áp dụng giá trị gợi ý (1.5 km / 5 phút) cho ${missingItems.length} trạm còn thiếu và lưu.\n` +
+        `- Nhấn Cancel: Hủy lưu để bạn chủ động kiểm tra và nhập số liệu thực tế.`
+      );
+      if (!confirmFill) return;
+
+      stopsToSave = orderedStops.map((s, idx) => ({
+        ...s,
+        khoang_cach_km: idx === 0 ? 0 : (s.khoang_cach_km ?? 1.5),
+        thoi_gian_di_chuyen_phut: idx === 0 ? 0 : (s.thoi_gian_di_chuyen_phut ?? 5),
+      }));
+    } else {
+      if (!window.confirm(`Bạn có chắc chắn muốn lưu lộ trình "${direction === 'luot_di' ? 'Lượt đi' : 'Lượt về'}" vào MongoDB?`)) {
+        return;
+      }
     }
+
     try {
       setSaving(true);
-      await routeService.updateStopsOrder(id, orderedStops, direction);
-      setInitialOrder([...orderedStops]);
+      await routeService.updateStopsOrder(id, stopsToSave, direction);
+      setOrderedStops([...stopsToSave]);
+      setInitialOrder([...stopsToSave]);
       setDirty(false);
       setSavedNotice(true);
       setTimeout(() => setSavedNotice(false), 3000);
@@ -382,16 +433,19 @@ export default function RouteDetailPage() {
 
                     {/* Inline Distance and Duration Editor */}
                     {index > 0 && (
-                      <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                         <span className="inline-flex items-center gap-1">
                           <Milestone size={11} className="text-slate-400" />
                           <input
                             type="number"
                             step="0.1"
                             min="0.1"
-                            value={stop.khoang_cach_km ?? 1.5}
+                            placeholder="1.5"
+                            value={stop.khoang_cach_km !== null && stop.khoang_cach_km !== undefined ? stop.khoang_cach_km : ''}
                             onChange={(e) => updateStopMetric(index, 'khoang_cach_km', e.target.value)}
-                            className="w-14 rounded border border-[#E2E8F0] px-1 py-0.5 text-[11px] text-[#172B4D] focus:border-[#245A85] focus:outline-none"
+                            className={`w-14 rounded border px-1 py-0.5 text-[11px] text-[#172B4D] focus:outline-none ${
+                              stop.khoang_cach_km === null ? 'border-amber-400 bg-amber-50/60 font-semibold' : 'border-[#E2E8F0] focus:border-[#245A85]'
+                            }`}
                           />
                           km
                         </span>
@@ -402,12 +456,20 @@ export default function RouteDetailPage() {
                             type="number"
                             step="1"
                             min="1"
-                            value={stop.thoi_gian_di_chuyen_phut ?? 5}
+                            placeholder="5"
+                            value={stop.thoi_gian_di_chuyen_phut !== null && stop.thoi_gian_di_chuyen_phut !== undefined ? stop.thoi_gian_di_chuyen_phut : ''}
                             onChange={(e) => updateStopMetric(index, 'thoi_gian_di_chuyen_phut', e.target.value)}
-                            className="w-12 rounded border border-[#E2E8F0] px-1 py-0.5 text-[11px] text-[#172B4D] focus:border-[#245A85] focus:outline-none"
+                            className={`w-12 rounded border px-1 py-0.5 text-[11px] text-[#172B4D] focus:outline-none ${
+                              stop.thoi_gian_di_chuyen_phut === null ? 'border-amber-400 bg-amber-50/60 font-semibold' : 'border-[#E2E8F0] focus:border-[#245A85]'
+                            }`}
                           />
                           phút
                         </span>
+                        {(stop.thoi_gian_di_chuyen_phut === null || stop.khoang_cach_km === null) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            ⚠ Thiếu dữ liệu cạnh
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

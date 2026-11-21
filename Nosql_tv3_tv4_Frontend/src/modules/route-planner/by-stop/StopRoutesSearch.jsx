@@ -93,7 +93,7 @@ export function StopRoutesSearch({
                       cursor: 'pointer',
                     }}
                   >
-                    📍 Xem chi tiết trạm & Bảng điện tử xe tới
+                    📍 Xem chi tiết trạm & Mô phỏng xe sắp đến
                   </button>
                 )}
               </div>

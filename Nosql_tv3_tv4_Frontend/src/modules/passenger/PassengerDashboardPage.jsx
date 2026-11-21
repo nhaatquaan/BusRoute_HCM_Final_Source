@@ -302,7 +302,7 @@ export default function PassengerDashboardPage() {
             className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-semibold text-white hover:bg-white/20 transition-colors border border-white/20"
           >
             <Sliders size={13} />
-            Tiêu chí mặc định: {preferences.defaultCriteria === 'fastest' ? 'Nhanh nhất' : (preferences.defaultCriteria === 'fewest_stops' || preferences.defaultCriteria === 'least_walking') ? 'Ít trạm dừng nhất' : 'Ít chuyển tuyến'}
+            Tiêu chí mặc định: {preferences?.defaultCriteria === 'fastest' ? 'Nhanh nhất' : (preferences?.defaultCriteria === 'fewest_stops' || preferences?.defaultCriteria === 'least_walking') ? 'Ít trạm dừng nhất' : 'Ít chuyển tuyến'}
           </button>
           <Link
             to="/portal/profile"
@@ -399,7 +399,7 @@ export default function PassengerDashboardPage() {
             )}
           </div>
 
-          {!recommendations?.hasData || recommendations?.recommendations?.length === 0 ? (
+          {!recommendations?.hasData || (recommendations?.recommendations || []).length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
               <Sparkles size={28} className="mx-auto text-slate-300 mb-2" />
               <p className="text-xs font-semibold text-slate-600">Chưa có đề xuất cá nhân hóa</p>
@@ -409,7 +409,7 @@ export default function PassengerDashboardPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {recommendations.recommendations.map((rec) => (
+              {(recommendations?.recommendations || []).map((rec) => (
                 <div
                   key={rec.id}
                   onClick={() => handleQuickPlanRoute(rec.fromStopId, rec.toStopId)}
@@ -581,7 +581,7 @@ export default function PassengerDashboardPage() {
       <div className="pt-2" ref={plannerSectionRef}>
         <RoutePlannerModule
           key={plannerKey}
-          defaultCriteria={preferences.defaultCriteria}
+          defaultCriteria={preferences?.defaultCriteria || 'least_transfers'}
           initialFrom={quickRoute.from}
           initialTo={quickRoute.to}
           autoSearchTrigger={quickRoute.trigger}

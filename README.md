@@ -28,6 +28,10 @@ Hệ thống tổ chức dữ liệu thành các **Vertex Collections (Đỉnh)*
 - `TuyenXe` (6 tuyến mẫu): Chứa metadata về tuyến (mã tuyến, tên tuyến, giá vé, giờ hoạt động, cự ly, màu sắc nhận diện).
 - `TramDung` (25 trạm dừng trọng điểm): Tên trạm, địa chỉ, quận/huyện, tọa độ địa lý GPS (`latitude`, `longitude`).
 - `NguoiDung` (3 tài khoản chuẩn hóa theo vai trò): Thông tin xác thực và phân quyền RBAC.
+- Các bộ sưu tập cá nhân hóa Hành khách:
+  - `LichSuTimKiem`: Lịch sử tra cứu lộ trình cá nhân hóa và đồng bộ từ thiết bị.
+  - `DiaDiemYeuThich`: Danh bạ địa điểm thân quen (Nhà, Cơ quan, Trường học) kèm trạm dừng gần nhất.
+  - `TuyenYeuThich`: Danh sách các tuyến xe buýt được đánh dấu theo dõi thường xuyên.
 
 ### 2.2. Cạnh (Edge Collections):
 - `CO_TRAM` (92 quan hệ): Cạnh nối giữa Tuyến xe và Trạm dừng đón/trả (`_from: "TuyenXe/TX_..."`, `_to: "TramDung/TR_..."`), kèm theo thuộc tính số thứ tự trạm (`thu_tu`) và chiều di chuyển (`ma_chieu`: `luot_di` hoặc `luot_ve`).
@@ -199,7 +203,7 @@ Nhằm đáp ứng môi trường Serverless (Vercel) không có ổ cứng lưu
    ```
 
 ### Bước 2: Triển khai Backend lên Vercel Serverless Function
-Backend đã có sẵn tệp cấu hình [vercel.json](file:///c:/Users/Admin/Desktop/Nosql_tong/Nosql_tong/Nosql_tv2/BusRouteBackend/vercel.json) và adapter tái sử dụng kết nối [api/index.js](file:///c:/Users/Admin/Desktop/Nosql_tong/Nosql_tong/Nosql_tv2/BusRouteBackend/api/index.js):
+Backend đã có sẵn tệp cấu hình `Nosql_tv2/BusRouteBackend/vercel.json` và adapter tái sử dụng kết nối `Nosql_tv2/BusRouteBackend/api/index.js`:
 ```powershell
 cd Nosql_tv2/BusRouteBackend
 vercel login
@@ -213,7 +217,7 @@ vercel --prod
 - `AI_PROVIDER`: `disabled` hoặc `gemini`.
 
 ### Bước 3: Triển khai Frontend lên Vercel
-Frontend đã có sẵn [vercel.json](file:///c:/Users/Admin/Desktop/Nosql_tong/Nosql_tong/Nosql_tv3_tv4_Frontend/vercel.json) với rewrite rule cho React Router:
+Frontend đã có sẵn `Nosql_tv3_tv4_Frontend/vercel.json` với rewrite rule cho React Router:
 ```powershell
 cd Nosql_tv3_tv4_Frontend
 vercel login

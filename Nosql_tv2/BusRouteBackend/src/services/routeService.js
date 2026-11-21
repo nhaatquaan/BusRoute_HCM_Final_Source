@@ -10,9 +10,23 @@ const getAllRoutes = async () => {
     return await routeCollection.find({}).sort({ ma_tuyen: 1 }).toArray();
 };
 
-// 2. Tìm tuyến xe theo ID (_key hoặc _id)
+// 2. Tìm tuyến xe theo ID (_key, _id hoặc mã tuyến)
 const getRouteById = async (routeId) => {
-    return await routeCollection.findOne(buildIdFilter("TuyenXe", routeId));
+    if (!routeId) return null;
+    const clean = String(routeId).trim();
+    const key = clean.includes("/") ? clean.split("/")[1] : clean;
+    const txKey = key.startsWith("TX_") ? key : `TX_${key}`;
+    return await routeCollection.findOne({
+        $or: [
+            { _key: key },
+            { _id: `TuyenXe/${key}` },
+            { _id: clean },
+            { _key: txKey },
+            { _id: `TuyenXe/${txKey}` },
+            { ma_tuyen: clean },
+            { ma_tuyen: key }
+        ]
+    });
 };
 
 // 3. Thêm tuyến xe

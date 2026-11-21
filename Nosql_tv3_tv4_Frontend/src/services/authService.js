@@ -155,7 +155,45 @@ export const authService = {
   getCurrentUser() {
     try {
       const raw = localStorage.getItem(USER_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) return JSON.parse(raw);
+
+      // Rehydrate user from token payload if USER_KEY is missing
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token && !token.startsWith('mock-')) {
+        const payload = this.parseJwt(token);
+        if (payload && (payload.id || payload._id || payload.email || payload.vai_tro || payload.role)) {
+          const restored = {
+            id: payload.id || payload._id || payload.userId,
+            username: payload.email?.split('@')[0] || payload.username || 'user',
+            fullName: payload.ho_ten || payload.fullName || payload.name || 'Người dùng',
+            email: payload.email || '',
+            role: payload.role || payload.vai_tro || 'passenger',
+            vai_tro: payload.role || payload.vai_tro || 'passenger',
+          };
+          localStorage.setItem(USER_KEY, JSON.stringify(restored));
+          return restored;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  parseJwt(token) {
+    try {
+      if (!token || typeof token !== 'string') return null;
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
     } catch {
       return null;
     }
@@ -171,6 +209,15 @@ export const authService = {
   },
 
   isAuthenticated() {
-    return Boolean(localStorage.getItem(TOKEN_KEY));
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return false;
+    if (token.startsWith('mock-')) return true;
+    const payload = this.parseJwt(token);
+    if (!payload) return true;
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      this.logout();
+      return false;
+    }
+    return true;
   },
 };

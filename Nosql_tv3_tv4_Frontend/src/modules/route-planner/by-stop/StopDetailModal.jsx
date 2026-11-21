@@ -195,10 +195,10 @@ export function StopDetailModal({
                 <div className="flex items-center gap-2">
                   <Radio size={16} className="text-emerald-400 animate-pulse" />
                   <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    Bảng điện tử dự báo xe sắp tới trạm (Mô phỏng Live)
+                    Mô phỏng xe sắp đến trạm (Thời gian đến ước tính)
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono">Cập nhật tự động</span>
+                <span className="text-[10px] text-slate-400 font-mono">Dữ liệu minh họa</span>
               </div>
 
               {loading ? (
@@ -256,6 +256,10 @@ export function StopDetailModal({
                   ))}
                 </div>
               )}
+
+              <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
+                * Lưu ý: Biển số xe, thời gian đến và mức độ đông khách mang tính chất mô phỏng minh họa trải nghiệm người dùng, không phải định vị GPS thời gian thực từ phương tiện vận hành.
+              </p>
             </div>
 
             {/* Stop Location Mini Map (5 cols) */}

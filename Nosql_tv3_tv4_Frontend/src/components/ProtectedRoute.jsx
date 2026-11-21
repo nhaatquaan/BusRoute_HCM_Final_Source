@@ -19,7 +19,10 @@ export default function ProtectedRoute({ children, allowedRoles }) {
       if (userRole === 'operator') {
         return <Navigate to="/operator/dashboard" replace />;
       }
-      return <Navigate to="/portal" replace />;
+      if (userRole === 'passenger') {
+        return <Navigate to="/portal" replace />;
+      }
+      return <Navigate to="/login" state={{ from: location }} replace />;
     }
   }
 

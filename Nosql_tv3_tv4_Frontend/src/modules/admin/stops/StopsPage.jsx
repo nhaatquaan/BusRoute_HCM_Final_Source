@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, Pencil, Trash2, MapPin, Download, Filter, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, MapPin, Download, Filter, CheckCircle2, AlertCircle, List, Map as MapIcon } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { stopService } from '../../../services/stopService';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
@@ -7,11 +10,21 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import StopFormModal from './StopFormModal';
 import { StopDetailModal } from '../../route-planner/by-stop/StopDetailModal.jsx';
 
+const stopMarkerIcon = new L.Icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [22, 34],
+  iconAnchor: [11, 34],
+  popupAnchor: [1, -30],
+});
+
 export default function StopsPage() {
   const [stops, setStops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingStop, setEditingStop] = useState(null);
@@ -173,13 +186,78 @@ export default function StopsPage() {
           ))}
         </select>
 
+        {/* View Mode Toggle: List vs Map */}
+        <div className="inline-flex rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+              viewMode === 'list' ? 'bg-white text-[#245A85] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <List size={13} /> Danh sách
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+              viewMode === 'map' ? 'bg-white text-[#245A85] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <MapIcon size={13} /> Bản đồ ({filtered.filter((s) => (s.lat ?? s.latitude ?? s.vi_do)).length})
+          </button>
+        </div>
+
         <span className="text-xs text-slate-500 ml-auto">
           Hiển thị <strong>{filtered.length}</strong> / <strong>{stops.length}</strong> trạm dừng
         </span>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-xs overflow-hidden">
+      {viewMode === 'map' ? (
+        <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-xs overflow-hidden p-2">
+          <div className="h-[550px] w-full rounded-lg overflow-hidden">
+            <MapContainer
+              center={[10.7769, 106.7009]}
+              zoom={13}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {filtered.map((stop) => {
+                const lat = Number(stop.lat ?? stop.latitude ?? stop.vi_do);
+                const lng = Number(stop.lng ?? stop.longitude ?? stop.kinh_do);
+                if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
+
+                return (
+                  <Marker key={stop.id || stop._id} position={[lat, lng]} icon={stopMarkerIcon}>
+                    <Popup>
+                      <div className="text-xs space-y-1">
+                        <div className="font-bold text-[#172B4D]">{stop.name || stop.ten_tram}</div>
+                        <div className="font-mono text-[#245A85] font-semibold">{stop.code || stop.ma_tram}</div>
+                        <div className="text-slate-600">{stop.address || stop.dia_chi || 'TP.HCM'}</div>
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingStop(stop)}
+                            className="text-[#245A85] font-semibold hover:underline cursor-pointer"
+                          >
+                            Xem chi tiết các tuyến đi qua &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              })}
+            </MapContainer>
+          </div>
+        </div>
+      ) : (
+        /* Table */
+        <div className="rounded-xl border border-[#E2E8F0] bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="border-b border-[#E2E8F0] bg-[#F8FAFC] text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -258,6 +336,7 @@ export default function StopsPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Form Modal */}
       <StopFormModal

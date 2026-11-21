@@ -123,7 +123,12 @@ const getRoute = async (req, res) => {
 
         const orderedStops = activeList.map((item, idx) => ({
             ...formatStopResponse(item.tram),
-            order: item.thu_tu || idx + 1
+            order: item.thu_tu || idx + 1,
+            thu_tu: item.thu_tu || idx + 1,
+            khoang_cach_km: item.khoang_cach_den_tram_tiep_theo ?? null,
+            thoi_gian_di_chuyen_phut: item.thoi_gian_den_tram_tiep_theo ?? null,
+            khoang_cach_den_tram_tiep_theo: item.khoang_cach_den_tram_tiep_theo ?? null,
+            thoi_gian_den_tram_tiep_theo: item.thoi_gian_den_tram_tiep_theo ?? null
         }));
 
         const formattedRoute = formatRouteResponse(detail.tuyen_xe, orderedStops);
@@ -448,17 +453,38 @@ const getRouteDetailWithStops = async (req, res) => {
 
         const result = await getRouteWithStops(id, ma_chieu || null);
 
-        if (!result) {
+        if (!result || !result.tuyen_xe) {
             return res.status(404).json({
                 success: false,
                 message: "Không tìm thấy tuyến xe"
             });
         }
 
+        const formattedRoute = formatRouteResponse(result.tuyen_xe);
+        const stopsList = (result.danh_sach_tram || []).map((item, idx) => ({
+            ...formatStopResponse(item.tram),
+            order: item.thu_tu || idx + 1,
+            thu_tu: item.thu_tu || idx + 1,
+            khoang_cach_km: item.khoang_cach_den_tram_tiep_theo ?? null,
+            thoi_gian_di_chuyen_phut: item.thoi_gian_den_tram_tiep_theo ?? null,
+            khoang_cach_den_tram_tiep_theo: item.khoang_cach_den_tram_tiep_theo ?? null,
+            thoi_gian_den_tram_tiep_theo: item.thoi_gian_den_tram_tiep_theo ?? null
+        }));
+
+        const responsePayload = {
+            ...formattedRoute,
+            stops: stopsList,
+            stopIds: stopsList.map((s) => s.id),
+            danh_sach_tram: result.danh_sach_tram,
+            tuyen_xe: formattedRoute
+        };
+
         return res.status(200).json({
             success: true,
+            source: "mongodb",
             message: "Lấy chi tiết tuyến xe thành công",
-            data: result
+            data: responsePayload,
+            ...responsePayload
         });
     } catch (error) {
         console.error("Get route detail error:", error);

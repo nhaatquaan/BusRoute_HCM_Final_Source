@@ -191,6 +191,14 @@ export default function App() {
         <Route path="profile" element={<ProfilePage />} />
       </Route>
 
+      {/* Route Aliases & Compatibility Redirects */}
+      <Route path="/passenger" element={<Navigate to="/portal" replace />} />
+      <Route path="/passenger/dashboard" element={<Navigate to="/portal" replace />} />
+      <Route path="/portal/dashboard" element={<Navigate to="/portal" replace />} />
+      <Route path="/operator/route-planner" element={<Navigate to="/operator/planner" replace />} />
+      <Route path="/portal/route-planner" element={<Navigate to="/portal/planner" replace />} />
+      <Route path="/admin/planner" element={<Navigate to="/admin/route-planner" replace />} />
+
       {/* Fallback & Redirect */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
